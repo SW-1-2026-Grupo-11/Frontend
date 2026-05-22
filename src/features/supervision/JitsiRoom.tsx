@@ -12,7 +12,7 @@ type JitsiRoomProps = {
 
 export default function JitsiRoom({ sessionId, displayName, jwt, callbacks }: JitsiRoomProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const { isLoading, hasError, kickParticipant, muteEveryone, hangup, toggleLobby } = useJitsi({
+  const { isLoading, hasError } = useJitsi({
     roomName: sessionId,
     displayName,
     jwt,

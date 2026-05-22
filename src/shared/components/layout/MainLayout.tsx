@@ -8,11 +8,12 @@ type NavItem = {
 };
 
 const NAV_ITEMS: NavItem[] = [
-  { label: UI.NAV_DASHBOARD, to: "/dashboard", icon: "" },
-  { label: UI.NAV_SUPERVISION, to: "/supervision", icon: "" },
-  { label: UI.NAV_USUARIOS, to: "/usuarios", icon: "" },
-  { label: UI.NAV_PRUEBAS, to: "/pruebas", icon: "" },
-  { label: UI.NAV_ENTREVISTAS, to: "/entrevistas", icon: "" },
+  { label: UI.NAV_DASHBOARD, to: "/dashboard", icon: "📊" },
+  { label: UI.NAV_SUPERVISION, to: "/supervision", icon: "📡" },
+  { label: UI.NAV_USUARIOS, to: "/usuarios", icon: "👥" },
+  { label: UI.NAV_PRUEBAS, to: "/pruebas", icon: "📝" },
+  { label: UI.NAV_ENTREVISTAS, to: "/entrevistas", icon: "🗓️" },
+  { label: "Reportes IA", to: "/reportes", icon: "🤖" },
 ];
 
 type MainLayoutProps = {

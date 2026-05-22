@@ -7,6 +7,7 @@ import UsuariosPage from "@/pages/UsuariosPage";
 import PruebasPage from "@/pages/PruebasPage";
 import EntrevistasPage from "@/pages/EntrevistasPage";
 import SessionPage from "@/pages/SessionPage";
+import ReportesPage from "@/pages/ReportesPage";
 
 const rootRoute = createRootRoute();
 
@@ -73,7 +74,18 @@ const sessionRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/session/$sessionId",
   beforeLoad: requireAuth,
+  validateSearch: (search: Record<string, unknown>) => ({
+    entrevistaId: Number(search.entrevistaId ?? 0),
+    participanteId: Number(search.participanteId ?? 1),
+  }),
   component: SessionPage,
+});
+
+const reportesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/reportes",
+  beforeLoad: requireAuth,
+  component: ReportesPage,
 });
 
 const routeTree = rootRoute.addChildren([
@@ -85,6 +97,7 @@ const routeTree = rootRoute.addChildren([
   pruebasRoute,
   entrevistasRoute,
   sessionRoute,
+  reportesRoute,
 ]);
 
 export const router = createRouter({ routeTree });

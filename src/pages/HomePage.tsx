@@ -1,73 +1,154 @@
 import { useNavigate } from "@tanstack/react-router";
 import { MainLayout } from "@/shared/components/layout";
-import { Button } from "@/shared/components/ui";
 import { useCurrentUser, useLogout } from "@/features/auth";
+import { useGetEntrevistas } from "@/features/interviews";
+import type { Entrevista } from "@/features/interviews";
 import { UI } from "@/config/constants";
+
+function formatDate(iso: string | null) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("es-ES", { year: "numeric", month: "short", day: "numeric" });
+}
+
+const ESTADO_LABEL: Record<string, string> = {
+  borrador: "Borrador",
+  programada: "Programada",
+  en_proceso: "En proceso",
+  finalizada: "Finalizada",
+  cancelada: "Cancelada",
+};
+
+const ESTADO_COLOR: Record<string, string> = {
+  borrador: "var(--color-text-muted)",
+  programada: "#3b82f6",
+  en_proceso: "#10b981",
+  finalizada: "var(--color-success)",
+  cancelada: "var(--color-danger)",
+};
 
 export default function HomePage() {
   const navigate = useNavigate();
   const { data: user } = useCurrentUser();
   const logout = useLogout();
+  const { data: entrevistas, isLoading } = useGetEntrevistas();
 
-  const handleCreateSession = () => {
+  const handleIniciar = (entrevista: Entrevista) => {
     const sessionId = crypto.randomUUID();
-    navigate({ to: "/session/$sessionId", params: { sessionId } });
+    navigate({
+      to: `/session/${sessionId}`,
+      search: { entrevistaId: entrevista.id, participanteId: user?.id ?? 1 },
+    } as any);
   };
 
-  return (
-    <MainLayout userName={user?.name} onLogout={logout}>
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          minHeight: "calc(100vh - var(--header-height, 56px) - var(--space-xl) * 2)",
-          gap: "var(--space-xl)",
-          padding: "var(--space-2xl)",
-          textAlign: "center",
-        }}
-      >
-        <div
-          style={{
-            width: 64,
-            height: 64,
-            borderRadius: "50%",
-            backgroundColor: "color-mix(in srgb, var(--color-primary) 15%, transparent)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: "1.75rem",
-          }}
-        >
-          📡
-        </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
-          <h1
-            style={{
-              fontSize: "var(--font-size-2xl)",
-              fontWeight: "var(--font-weight-bold)",
-              color: "var(--color-text)",
-            }}
-          >
-            {UI.HOME_TITLE}
+  const activas = entrevistas?.filter((e) =>
+    e.estado === "programada" || e.estado === "en_proceso" || e.estado === "borrador"
+  ) ?? [];
+
+  return (
+    <MainLayout userName={user?.username} onLogout={logout}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--space-xl)" }}>
+        <div>
+          <h1 style={{ fontSize: "var(--font-size-2xl)", fontWeight: "var(--font-weight-bold)", color: "var(--color-text)" }}>
+            📡 {UI.HOME_TITLE}
           </h1>
-          <p
-            style={{
-              fontSize: "var(--font-size-base)",
-              color: "var(--color-text-muted)",
-              maxWidth: "480px",
-              lineHeight: 1.6,
-            }}
-          >
-            {UI.HOME_SUBTITLE}
+          <p style={{ fontSize: "var(--font-size-sm)", color: "var(--color-text-muted)", marginTop: "var(--space-xs)" }}>
+            Selecciona una entrevista activa para iniciar la supervisión en tiempo real.
           </p>
         </div>
+      </div>
 
-        <Button variant="primary" onClick={handleCreateSession}>
-          {UI.CREATE_SESSION_BUTTON}
-        </Button>
+      {/* Lista de entrevistas */}
+      <div style={{
+        backgroundColor: "var(--color-surface)",
+        border: "1px solid var(--color-border)",
+        borderRadius: "var(--radius-lg)",
+        overflow: "hidden",
+        boxShadow: "var(--shadow-sm)",
+      }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ backgroundColor: "var(--color-surface-hover)" }}>
+              {["#", "Título", "Estado", "Fecha programada", "Acción"].map((h) => (
+                <th key={h} style={{
+                  padding: "var(--space-sm) var(--space-md)",
+                  textAlign: "left",
+                  fontSize: "var(--font-size-sm)",
+                  fontWeight: "var(--font-weight-bold)",
+                  color: "var(--color-text-muted)",
+                  borderBottom: "1px solid var(--color-border)",
+                  whiteSpace: "nowrap",
+                }}>
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading && (
+              <tr>
+                <td colSpan={5} style={{ padding: "var(--space-xl)", textAlign: "center", color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)" }}>
+                  Cargando entrevistas...
+                </td>
+              </tr>
+            )}
+            {!isLoading && activas.length === 0 && (
+              <tr>
+                <td colSpan={5} style={{ padding: "var(--space-xl)", textAlign: "center", color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)" }}>
+                  No hay entrevistas activas disponibles
+                </td>
+              </tr>
+            )}
+            {activas.map((e) => (
+              <tr key={e.id} style={{ borderBottom: "1px solid var(--color-border)" }}>
+                <td style={{ padding: "var(--space-sm) var(--space-md)", fontSize: "var(--font-size-sm)", color: "var(--color-text-muted)" }}>
+                  {e.id}
+                </td>
+                <td style={{ padding: "var(--space-sm) var(--space-md)", fontSize: "var(--font-size-sm)", color: "var(--color-text)", fontWeight: "var(--font-weight-medium)" }}>
+                  {e.titulo}
+                </td>
+                <td style={{ padding: "var(--space-sm) var(--space-md)" }}>
+                  <span style={{
+                    fontSize: "var(--font-size-xs, 0.75rem)",
+                    fontWeight: "bold",
+                    color: ESTADO_COLOR[e.estado] ?? "var(--color-text-muted)",
+                    backgroundColor: `color-mix(in srgb, ${ESTADO_COLOR[e.estado] ?? "gray"} 15%, transparent)`,
+                    padding: "2px 10px",
+                    borderRadius: "var(--radius-full)",
+                    border: `1px solid ${ESTADO_COLOR[e.estado] ?? "var(--color-border)"}`,
+                    textTransform: "capitalize",
+                  }}>
+                    {ESTADO_LABEL[e.estado] ?? e.estado}
+                  </span>
+                </td>
+                <td style={{ padding: "var(--space-sm) var(--space-md)", fontSize: "var(--font-size-sm)", color: "var(--color-text-muted)", whiteSpace: "nowrap" }}>
+                  {formatDate(e.fecha_programada)}
+                </td>
+                <td style={{ padding: "var(--space-sm) var(--space-md)" }}>
+                  <button
+                    id={`btn-iniciar-entrevista-${e.id}`}
+                    onClick={() => handleIniciar(e)}
+                    style={{
+                      padding: "var(--space-xs) var(--space-md)",
+                      fontSize: "var(--font-size-sm)",
+                      fontWeight: "var(--font-weight-medium)",
+                      color: "#fff",
+                      backgroundColor: "var(--color-primary)",
+                      border: "none",
+                      borderRadius: "var(--radius-md)",
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Iniciar supervisión
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </MainLayout>
   );

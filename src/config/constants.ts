@@ -3,6 +3,20 @@ export const QUERY_STALE_TIME = 1000 * 60 * 5;
 export const AUTH_TOKEN_KEY = "auth_token";
 export const AUTH_REFRESH_KEY = "auth_refresh";
 
+export const PROCTORING = {
+  FRAME_INTERVAL_MS: 2000,
+  CAPTURE_WIDTH: 640,
+  CAPTURE_HEIGHT: 480,
+  JPEG_QUALITY: 0.72,
+  DETECTION_LABELS: {
+    uso_de_celular: "Teléfono detectado",
+    sin_rostro: "Sin rostro en cámara",
+    multiples_rostros: "Más de una persona",
+    mirada_fuera_pantalla: "Mirada desviada",
+    posible_celular_o_lectura: "Cabeza agachada / posible lectura",
+  },
+} as const;
+
 export const JITSI = {
   TOOLBAR_BUTTONS: [
     "microphone",
@@ -173,6 +187,9 @@ export const DASHBOARD = {
   ACCESO_USUARIOS: "Gestionar usuarios",
   ACCESO_PRUEBAS: "Gestionar pruebas",
   ACCESO_ENTREVISTAS: "Gestionar entrevistas",
+  ACTIVIDAD_TITLE: "Actividad reciente",
+  ACTIVIDAD_ERROR: "Error al cargar la actividad reciente",
+  ACTIVIDAD_EMPTY: "No hay actividad registrada",
 } as const;
 
 export const ENTREVISTAS = {
