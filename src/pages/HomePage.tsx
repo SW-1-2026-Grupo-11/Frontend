@@ -1,9 +1,23 @@
+import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { MainLayout } from "@/shared/components/layout";
 import { useCurrentUser, useLogout } from "@/features/auth";
-import { useGetEntrevistas } from "@/features/interviews";
+import { useGetEntrevistas, entrevistasService } from "@/features/interviews";
 import type { Entrevista } from "@/features/interviews";
 import { UI } from "@/config/constants";
+
+interface InvitadoJwtPayload {
+  moderator?: boolean;
+}
+
+function fixLink(link: string): string {
+  try {
+    const url = new URL(link);
+    return `${window.location.origin}${url.pathname}${url.search}`;
+  } catch {
+    return link;
+  }
+}
 
 function formatDate(iso: string | null) {
   if (!iso) return "—";
@@ -32,12 +46,57 @@ export default function HomePage() {
   const logout = useLogout();
   const { data: entrevistas, isLoading } = useGetEntrevistas();
 
-  const handleIniciar = (entrevista: Entrevista) => {
-    const sessionId = crypto.randomUUID();
-    navigate({
-      to: `/session/${sessionId}`,
-      search: { entrevistaId: entrevista.id, participanteId: user?.id ?? 1 },
-    } as any);
+  const [loadingId, setLoadingId] = useState<number | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const handleIniciar = async (entrevista: Entrevista) => {
+    setLoadingId(entrevista.id);
+    setErrorMsg(null);
+
+    try {
+      // a) Busca primero en localStorage (guardado al crear la sesión)
+      const linkGuardado = localStorage.getItem(
+        `link_supervisor_entrevista_${entrevista.id}`,
+      );
+      if (linkGuardado) {
+        window.location.href = fixLink(linkGuardado);
+        return;
+      }
+
+      // b) Fallback: decodifica JWT de cada invitado buscando moderator=true
+      const invitados = await entrevistasService.getInvitadosPorEntrevista(entrevista.id);
+
+      let supervisorLink: string | null = null;
+
+      for (const inv of invitados) {
+        if (!inv.link_invitacion) continue;
+        try {
+          const url = new URL(inv.link_invitacion);
+          const jwtToken = url.searchParams.get("token");
+          if (!jwtToken) continue;
+          const payload = JSON.parse(atob(jwtToken.split(".")[1])) as InvitadoJwtPayload;
+          if (payload.moderator === true) {
+            supervisorLink = fixLink(inv.link_invitacion);
+            break;
+          }
+        } catch {
+          // JWT inválido o URL malformada — saltar
+        }
+      }
+
+      if (supervisorLink) {
+        window.location.href = supervisorLink;
+      } else {
+        setErrorMsg(
+          "Crea una sesión para esta entrevista primero desde el menú Sesiones.",
+        );
+        void navigate({ to: "/sesiones/nueva" });
+      }
+    } catch {
+      setErrorMsg("Error al obtener los links. Intenta de nuevo.");
+    } finally {
+      setLoadingId(null);
+    }
   };
 
 
@@ -58,6 +117,33 @@ export default function HomePage() {
           </p>
         </div>
       </div>
+
+      {/* Mensaje de error */}
+      {errorMsg && (
+        <div
+          style={{
+            marginBottom: "var(--space-md)",
+            padding: "var(--space-sm) var(--space-md)",
+            backgroundColor: "rgba(220,38,38,0.08)",
+            border: "1px solid rgba(220,38,38,0.3)",
+            borderRadius: "var(--radius-md)",
+            fontSize: "var(--font-size-sm)",
+            color: "var(--color-danger)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "var(--space-sm)",
+          }}
+        >
+          <span>{errorMsg}</span>
+          <button
+            onClick={() => setErrorMsg(null)}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", fontSize: 16, lineHeight: 1, padding: "0 4px" }}
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {/* Lista de entrevistas */}
       <div style={{
@@ -128,21 +214,24 @@ export default function HomePage() {
                 <td style={{ padding: "var(--space-sm) var(--space-md)" }}>
                   <button
                     id={`btn-iniciar-entrevista-${e.id}`}
-                    onClick={() => handleIniciar(e)}
+                    onClick={() => void handleIniciar(e)}
+                    disabled={loadingId !== null}
                     style={{
                       padding: "var(--space-xs) var(--space-md)",
                       fontSize: "var(--font-size-sm)",
                       fontWeight: "var(--font-weight-medium)",
                       color: "#fff",
-                      backgroundColor: "var(--color-primary)",
+                      backgroundColor: loadingId === e.id ? "#6b7280" : "var(--color-primary)",
                       border: "none",
                       borderRadius: "var(--radius-md)",
-                      cursor: "pointer",
+                      cursor: loadingId !== null ? "not-allowed" : "pointer",
                       fontFamily: "inherit",
                       whiteSpace: "nowrap",
+                      opacity: loadingId !== null && loadingId !== e.id ? 0.5 : 1,
+                      minWidth: 140,
                     }}
                   >
-                    Iniciar supervisión
+                    {loadingId === e.id ? "Buscando link..." : "Iniciar supervisión"}
                   </button>
                 </td>
               </tr>

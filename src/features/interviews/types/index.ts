@@ -45,3 +45,33 @@ export type AsignarPruebaDto = {
   asignada_por: number;
   observaciones?: string;
 };
+
+export type ProgramarInvitadoDto = {
+  nombre: string;
+  email: string;
+};
+
+export type ProgramarEntrevistaDto = {
+  titulo: string;
+  descripcion?: string;
+  evaluador_id: number;
+  fecha_programada: string;
+  duracion_minutos: number;
+  invitados: ProgramarInvitadoDto[];
+};
+
+export type InvitadoProgramado = {
+  id: number;
+  nombre: string;
+  email: string;
+  estado: string;
+  link_invitacion: string | null;
+};
+
+export type ProgramarEntrevistaResponse = {
+  entrevista: Entrevista;
+  invitados: InvitadoProgramado[];
+  link_supervisor: string;
+  emails_encolados: boolean;
+  mensaje: string;
+};

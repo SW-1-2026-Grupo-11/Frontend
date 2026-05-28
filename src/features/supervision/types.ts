@@ -41,3 +41,10 @@ export type JitsiConfig = {
   containerRef: React.RefObject<HTMLDivElement | null>;
   callbacks?: JitsiCallbacks;
 };
+
+export type JitsiRoomHandle = {
+  hangup: () => void;
+  kickParticipant: (id: string) => void;
+  getParticipantCount: () => number;
+  captureScreenshot: () => Promise<{ dataURL: string }>;
+};

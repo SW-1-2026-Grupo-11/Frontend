@@ -22,3 +22,10 @@ export { default as EntrevistasTable } from "./components/EntrevistasTable";
 export { default as EntrevistaModal } from "./components/EntrevistaModal";
 export { default as EntrevistaDetailDrawer } from "./components/EntrevistaDetailDrawer";
 export { default as AsignarPruebaModal } from "./components/AsignarPruebaModal";
+export type {
+  ProgramarInvitadoDto,
+  ProgramarEntrevistaDto,
+  InvitadoProgramado,
+  ProgramarEntrevistaResponse,
+} from "./types";
+export { useProgramarEntrevista, useGetInvitadosPorEntrevista } from "./hooks/useEntrevistas";

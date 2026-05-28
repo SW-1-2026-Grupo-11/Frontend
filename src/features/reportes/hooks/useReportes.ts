@@ -6,7 +6,8 @@ const BASE_KEY = ["reportes"] as const;
 export function useGetReportes(page = 1) {
   return useQuery({
     queryKey: [...BASE_KEY, page] as const,
-    queryFn: () => reportesService.getReportes(page),
+    queryFn: () => reportesService.getReportes(page).catch(() => []),
+    retry: false,
   });
 }
 
@@ -15,5 +16,6 @@ export function useGetReporteById(id: number) {
     queryKey: [...BASE_KEY, id] as const,
     queryFn: () => reportesService.getReporteById(id),
     enabled: id > 0,
+    retry: false,
   });
 }

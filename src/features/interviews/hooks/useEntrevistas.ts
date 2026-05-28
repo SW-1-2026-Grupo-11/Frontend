@@ -1,6 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { entrevistasService } from "../services/entrevistasService";
-import type { AsignarPruebaDto, CreateEntrevistaDto, UpdateEntrevistaDto } from "../types";
+import type {
+  AsignarPruebaDto,
+  CreateEntrevistaDto,
+  ProgramarEntrevistaDto,
+  UpdateEntrevistaDto,
+} from "../types";
 
 const BASE_KEY = ["entrevistas"] as const;
 const ASIGNACIONES_KEY = ["pruebas-entrevista"] as const;
@@ -82,5 +87,24 @@ export function useRemoverAsignacion() {
         queryKey: [...ASIGNACIONES_KEY, entrevistaId],
       });
     },
+  });
+}
+
+export function useProgramarEntrevista() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (dto: ProgramarEntrevistaDto) => entrevistasService.programarEntrevista(dto),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: BASE_KEY });
+    },
+  });
+}
+
+export function useGetInvitadosPorEntrevista(entrevistaId: number) {
+  return useQuery({
+    queryKey: ["invitados", entrevistaId] as const,
+    queryFn: () => entrevistasService.getInvitadosPorEntrevista(entrevistaId),
+    enabled: !!entrevistaId,
+    retry: false,
   });
 }

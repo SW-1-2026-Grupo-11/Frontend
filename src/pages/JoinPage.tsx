@@ -1,0 +1,1023 @@
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useSearch } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { useJwtDecode } from "@/shared/hooks/useJwtDecode";
+import {
+  useActualizarObservaciones,
+  useMarcarAceptado,
+} from "@/features/sesiones";
+import type { Sesion, SesionDetalle, InvitadoSesion } from "@/features/sesiones";
+import env from "@/config/env";
+import { useProctoring, proctoringService } from "@/features/proctoring";
+import { JitsiRoom } from "@/features/supervision";
+import type { JitsiRoomHandle } from "@/features/supervision";
+import Button from "@/shared/components/ui/Button";
+import { PROCTORING } from "@/config/constants";
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function formatSeconds(totalSecs: number): string {
+  const h = Math.floor(totalSecs / 3600);
+  const m = Math.floor((totalSecs % 3600) / 60);
+  const s = totalSecs % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return h > 0 ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+
+function getInitials(nombre: string): string {
+  return nombre
+    .split(" ")
+    .map((n) => n[0] ?? "")
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+function fixLink(link: string): string {
+  try {
+    const url = new URL(link);
+    return `${window.location.origin}${url.pathname}${url.search}`;
+  } catch {
+    return link;
+  }
+}
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// ─── Componente ───────────────────────────────────────────────────────────────
+
+export default function JoinPage() {
+  // ── URL search params ──
+  const rawSearch = useSearch({ strict: false }) as { token?: string };
+  const token = rawSearch.token ?? "";
+
+  // ── JWT decode ──
+  const decoded = useJwtDecode(token || null);
+  const tokenError = !decoded && token !== "";
+  const isInvalid = !token || tokenError;
+
+  // ── Estado ──
+  const [fase, setFase] = useState<"sala" | "ended">("sala");
+  const [observaciones, setObservaciones] = useState("");
+  const [timerSeconds, setTimerSeconds] = useState(0);
+  const [jitsiJoined, setJitsiJoined] = useState(false);
+  const [copiadoLink, setCopiadoLink] = useState<Record<number, boolean>>({});
+  const [copiadoTodos, setCopiadoTodos] = useState(false);
+  const [showInfoPanel, setShowInfoPanel] = useState(false);
+  const [copiadoSupervisor, setCopiadoSupervisor] = useState(false);
+  const [nuevoNombre, setNuevoNombre] = useState("");
+  const [nuevoEmail, setNuevoEmail] = useState("");
+  const [agregandoInvitado, setAgregandoInvitado] = useState(false);
+  const [mensajeAgregar, setMensajeAgregar] = useState<string | null>(null);
+  const [invitadosExtra, setInvitadosExtra] = useState<InvitadoSesion[]>([]);
+
+  // ── Refs ──
+  const jitsiRef = useRef<JitsiRoomHandle>(null);
+  const marcarFiredRef = useRef(false);
+
+  // ── Fetch público con el JWT del token de invitado/supervisor ──
+  const fetchWithInvitadoToken = useCallback(
+    <T,>(url: string): Promise<T> =>
+      fetch(`${env.API_URL}${url}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      }).then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json() as Promise<T>;
+      }),
+    [token],
+  );
+
+  // ── Queries usando el token de la URL, no el de localStorage ──
+  const { data: sesion } = useQuery<Sesion | undefined>({
+    queryKey: ["sesion-publica", decoded?.entrevista_id, token],
+    queryFn: async () => {
+      const raw = await fetchWithInvitadoToken<Sesion[] | { results: Sesion[] }>(
+        `/sesiones/?entrevista=${decoded!.entrevista_id}`,
+      );
+      const list = Array.isArray(raw) ? raw : (raw as { results: Sesion[] }).results ?? [];
+      return list[0];
+    },
+    enabled: !!decoded?.entrevista_id && !!token,
+    retry: false,
+  });
+
+  const { data: sesionDetalle } = useQuery<SesionDetalle>({
+    queryKey: ["sesion-detalle-publica", sesion?.id, token],
+    queryFn: () => fetchWithInvitadoToken<SesionDetalle>(`/sesiones/${sesion!.id}/detalle/`),
+    enabled: !!sesion?.id && !!token,
+    retry: false,
+    select: (data) => ({
+      ...data,
+      invitados: data.invitados.map((inv) => ({
+        ...inv,
+        link_invitacion: inv.link_invitacion ? fixLink(inv.link_invitacion) : inv.link_invitacion,
+      })),
+    }),
+  });
+
+  // ── Mutaciones ──
+  const marcarAceptadoMutation = useMarcarAceptado();
+  const actualizarObsMutation = useActualizarObservaciones();
+
+  // ── Proctoring (solo candidatos, se activa cuando entran a la sala) ──
+  const proctoring = useProctoring({
+    entrevistaId: decoded?.entrevista_id ?? 0,
+    participanteId: decoded?.invitado_id ?? 0,
+    sessionId: sesion ? String(sesion.id) : undefined,
+    enabled: jitsiJoined && !decoded?.moderator,
+  });
+
+  // ── Marcar invitado como aceptado (una sola vez al cargar) ──
+  useEffect(() => {
+    if (marcarFiredRef.current || !decoded || decoded.moderator || decoded.invitado_id === null) return;
+    marcarFiredRef.current = true;
+    marcarAceptadoMutation.mutate({ invitadoId: decoded.invitado_id, token });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [decoded]);
+
+  // ── Timer de sesión ──
+  useEffect(() => {
+    if (fase !== "sala") return;
+    const id = setInterval(() => setTimerSeconds((s) => s + 1), 1000);
+    return () => clearInterval(id);
+  }, [fase]);
+
+  // ── Captura de frames Jitsi para IA (candidatos únicamente) ──
+  useEffect(() => {
+    if (!jitsiJoined || decoded?.moderator || !decoded) return;
+
+    const id = setInterval(() => {
+      jitsiRef.current
+        ?.captureScreenshot()
+        .then((data) => {
+          if (!data?.dataURL) return;
+          void proctoringService.analyzeFrame({
+            entrevista_id: String(decoded.entrevista_id),
+            participante_id: String(decoded.invitado_id ?? 0),
+            frame: data.dataURL,
+            timestamp: new Date().toISOString(),
+            session_id: sesion ? String(sesion.id) : undefined,
+          });
+        })
+        .catch(() => undefined);
+    }, PROCTORING.FRAME_INTERVAL_MS);
+
+    return () => clearInterval(id);
+  }, [jitsiJoined, decoded, sesion]);
+
+  // ── Inicializar observaciones desde el detalle (solo la primera vez que llega) ──
+  const obsInitRef = useRef(false);
+  useEffect(() => {
+    if (obsInitRef.current || !sesionDetalle) return;
+    obsInitRef.current = true;
+    setObservaciones(sesionDetalle.observaciones_internas ?? "");
+  }, [sesionDetalle]);
+
+  // ─── Handlers ─────────────────────────────────────────────────────────────
+
+  const handleSalir = () => {
+    jitsiRef.current?.hangup();
+    setFase("ended");
+    setJitsiJoined(false);
+    setTimerSeconds(0);
+  };
+
+  const handleConferenceJoined = useCallback(() => {
+    setJitsiJoined(true);
+  }, []);
+
+  const handleParticipantJoined = useCallback(() => {
+    // Jitsi manages participant display internally
+  }, []);
+
+  const handleParticipantLeft = useCallback(
+    (id: string) => {
+      proctoring.onParticipantLeft({ id });
+    },
+    [proctoring],
+  );
+
+  const handleVideoMuteChanged = useCallback(
+    (muted: boolean) => {
+      proctoring.onCameraToggled("local", muted);
+    },
+    [proctoring],
+  );
+
+  const handleScreenShareChanged = useCallback(
+    (on: boolean) => {
+      proctoring.onScreenSharing("local", on);
+    },
+    [proctoring],
+  );
+
+  const handleReadyToClose = useCallback(() => {
+    setFase("ended");
+    setJitsiJoined(false);
+    setTimerSeconds(0);
+  }, []);
+
+  const handleGuardarObservaciones = () => {
+    if (!sesion) return;
+    actualizarObsMutation.mutate({ sesionId: sesion.id, dto: { observaciones } });
+  };
+
+  const handleCopiarLinkInvitado = (invId: number, link: string) => {
+    void navigator.clipboard.writeText(link).then(() => {
+      setCopiadoLink((prev) => ({ ...prev, [invId]: true }));
+      setTimeout(() => setCopiadoLink((prev) => ({ ...prev, [invId]: false })), 2000);
+    });
+  };
+
+  const handleCopiarTodos = () => {
+    if (!sesionDetalle) return;
+    const lines = sesionDetalle.invitados
+      .filter((inv) => inv.link_invitacion)
+      .map((inv) => `${inv.nombre}: ${inv.link_invitacion ?? ""}`)
+      .join("\n");
+    const text = `=== Links de evaluación ===\n${lines}\n==========================`;
+    void navigator.clipboard.writeText(text).then(() => {
+      setCopiadoTodos(true);
+      setTimeout(() => setCopiadoTodos(false), 2000);
+    });
+  };
+
+  const handleAgregarInvitado = async () => {
+    const nombre = nuevoNombre.trim();
+    const email = nuevoEmail.trim();
+    if (!nombre || !EMAIL_REGEX.test(email) || !sesion?.id) return;
+
+    setAgregandoInvitado(true);
+    setMensajeAgregar(null);
+
+    try {
+      const res = await fetch(`${env.API_URL}/sesiones/${sesion.id}/agregar-invitado/`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ nombre, email }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const nuevo = (await res.json()) as InvitadoSesion;
+      const nuevoFixed: InvitadoSesion = {
+        ...nuevo,
+        link_invitacion: nuevo.link_invitacion ? fixLink(nuevo.link_invitacion) : nuevo.link_invitacion,
+      };
+      setInvitadosExtra((prev) => [...prev, nuevoFixed]);
+      setNuevoNombre("");
+      setNuevoEmail("");
+      setMensajeAgregar("✓ Invitado agregado");
+      setTimeout(() => setMensajeAgregar(null), 2000);
+    } catch {
+      setMensajeAgregar("Error al agregar invitado");
+      setTimeout(() => setMensajeAgregar(null), 3000);
+    } finally {
+      setAgregandoInvitado(false);
+    }
+  };
+
+  const handleCopiarSupervisor = (link: string) => {
+    void navigator.clipboard.writeText(link).then(() => {
+      setCopiadoSupervisor(true);
+      setTimeout(() => setCopiadoSupervisor(false), 2000);
+    });
+  };
+
+  // ─── Pantalla de error de token ──────────────────────────────────────────
+
+  if (isInvalid) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "100vh",
+          backgroundColor: "var(--color-background)",
+          flexDirection: "column",
+          gap: "var(--space-md)",
+        }}
+      >
+        <span style={{ fontSize: "3rem" }}>⚠️</span>
+        <h1
+          style={{
+            fontSize: "var(--font-size-2xl)",
+            fontWeight: "var(--font-weight-bold)",
+            color: "var(--color-text)",
+          }}
+        >
+          Link inválido o expirado
+        </h1>
+        <p style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-base)" }}>
+          El enlace que usaste no es válido o ya expiró. Contacta al evaluador.
+        </p>
+      </div>
+    );
+  }
+
+  // ─── Pantalla de carga (JWT aún siendo decodificado) ────────────────────
+
+  if (!decoded) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "100vh",
+          backgroundColor: "#0a0a0f",
+          flexDirection: "column",
+          gap: "var(--space-md)",
+        }}
+      >
+        <style>{`@keyframes jp-spin { to { transform: rotate(360deg); } }`}</style>
+        <div
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: "50%",
+            border: "3px solid rgba(255,255,255,0.1)",
+            borderTopColor: "var(--color-primary)",
+            animation: "jp-spin 0.8s linear infinite",
+          }}
+        />
+        <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "var(--font-size-sm)", margin: 0 }}>
+          Preparando sala...
+        </p>
+      </div>
+    );
+  }
+
+  // ─── Pantalla de sesión finalizada ───────────────────────────────────────
+
+  if (fase === "ended") {
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "100vh",
+          backgroundColor: "#0a0a0f",
+          flexDirection: "column",
+          gap: "var(--space-md)",
+        }}
+      >
+        <span style={{ fontSize: "3rem" }}>✅</span>
+        <h1
+          style={{
+            fontSize: "var(--font-size-2xl)",
+            fontWeight: "var(--font-weight-bold)",
+            color: "rgba(255,255,255,0.9)",
+          }}
+        >
+          Sesión finalizada
+        </h1>
+        <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "var(--font-size-base)" }}>
+          Puedes cerrar esta ventana.
+        </p>
+      </div>
+    );
+  }
+
+  // ─── Sala de video (full-screen) ─────────────────────────────────────────
+
+  const roomName =
+    sesion?.room_name ??
+    sesionDetalle?.room_name ??
+    `entrevista-${decoded.entrevista_id}`;
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        backgroundColor: "#0a0a0f",
+        display: "flex",
+        flexDirection: "column",
+        zIndex: 9999,
+      }}
+    >
+      {/* ── Topbar ── */}
+      <div
+        style={{
+          height: 48,
+          backgroundColor: "rgba(255,255,255,0.04)",
+          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          display: "flex",
+          alignItems: "center",
+          paddingInline: "var(--space-lg)",
+          gap: "var(--space-md)",
+          flexShrink: 0,
+        }}
+      >
+        {/* Izquierda: logo + nombre */}
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", flex: 1 }}>
+          <span
+            style={{
+              fontSize: "var(--font-size-base)",
+              fontWeight: "var(--font-weight-bold)",
+              color: "var(--color-primary)",
+            }}
+          >
+            EvalSecure
+          </span>
+          <span style={{ color: "rgba(255,255,255,0.2)" }}>|</span>
+          <span
+            style={{
+              fontSize: "var(--font-size-sm)",
+              color: "rgba(255,255,255,0.7)",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              maxWidth: "240px",
+            }}
+          >
+            {sesionDetalle?.titulo_entrevista ?? "Sesión de evaluación"}
+          </span>
+        </div>
+
+        {/* Centro: timer */}
+        <div
+          style={{
+            fontSize: "var(--font-size-base)",
+            fontWeight: "var(--font-weight-bold)",
+            color: "rgba(255,255,255,0.9)",
+            fontVariantNumeric: "tabular-nums",
+            minWidth: "60px",
+            textAlign: "center",
+          }}
+        >
+          {formatSeconds(timerSeconds)}
+        </div>
+
+        {/* Derecha: badge + botones */}
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", flex: 1, justifyContent: "flex-end" }}>
+          {decoded.moderator ? (
+            <span
+              style={{
+                padding: "3px 10px",
+                borderRadius: "var(--radius-full)",
+                fontSize: "var(--font-size-sm)",
+                fontWeight: "var(--font-weight-medium)",
+                backgroundColor: "rgba(239,68,68,0.2)",
+                color: "#ef4444",
+                border: "1px solid rgba(239,68,68,0.4)",
+              }}
+            >
+              Supervisor
+            </span>
+          ) : (
+            <span
+              style={{
+                padding: "3px 10px",
+                borderRadius: "var(--radius-full)",
+                fontSize: "var(--font-size-sm)",
+                fontWeight: "var(--font-weight-medium)",
+                backgroundColor: "rgba(34,197,94,0.2)",
+                color: "#22c55e",
+                border: "1px solid rgba(34,197,94,0.4)",
+              }}
+            >
+              En evaluación
+            </span>
+          )}
+          {decoded.moderator && (
+            <button
+              onClick={() => setShowInfoPanel((p) => !p)}
+              style={{
+                padding: "4px 12px",
+                background: showInfoPanel ? "rgba(99,102,241,0.25)" : "rgba(255,255,255,0.06)",
+                border: `1px solid ${showInfoPanel ? "rgba(99,102,241,0.5)" : "rgba(255,255,255,0.12)"}`,
+                borderRadius: "var(--radius-md)",
+                color: showInfoPanel ? "#a5b4fc" : "rgba(255,255,255,0.7)",
+                cursor: "pointer",
+                fontSize: "var(--font-size-sm)",
+                fontFamily: "inherit",
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+                transition: "background 0.15s, border-color 0.15s, color 0.15s",
+              }}
+            >
+              ℹ️ Info sesión
+            </button>
+          )}
+          <Button variant="danger" size="sm" onClick={handleSalir}>
+            Salir
+          </Button>
+        </div>
+      </div>
+
+      {/* ── Contenido principal: Jitsi + panel lateral ── */}
+      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+        {/* Jitsi iframe */}
+        <div style={{ flex: 1, overflow: "hidden" }}>
+          <JitsiRoom
+            ref={jitsiRef}
+            roomName={roomName}
+            displayName={decoded.nombre}
+            email={decoded.email}
+            isModerator={decoded.moderator}
+            onConferenceJoined={handleConferenceJoined}
+            onParticipantJoined={handleParticipantJoined}
+            onParticipantLeft={handleParticipantLeft}
+            onVideoMuteChanged={handleVideoMuteChanged}
+            onScreenShareChanged={handleScreenShareChanged}
+            onReadyToClose={handleReadyToClose}
+          />
+        </div>
+
+        {/* Panel lateral — solo supervisores */}
+        {decoded.moderator && (
+          <div
+            style={{
+              width: 280,
+              flexShrink: 0,
+              backgroundColor: "rgba(255,255,255,0.03)",
+              borderLeft: "1px solid rgba(255,255,255,0.08)",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                flex: 1,
+                overflowY: "auto",
+                padding: "var(--space-md)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "var(--space-lg)",
+              }}
+            >
+              {/* Links de invitados */}
+              <section>
+                {(() => {
+                  const todosInvitados = [
+                    ...(sesionDetalle?.invitados ?? []),
+                    ...invitadosExtra,
+                  ];
+                  return (
+                    <>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--space-sm)" }}>
+                        <h3 style={{
+                          fontSize: "var(--font-size-sm)",
+                          fontWeight: "var(--font-weight-bold)",
+                          color: "rgba(255,255,255,0.5)",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.05em",
+                          margin: 0,
+                        }}>
+                          Links de invitados
+                        </h3>
+                        {todosInvitados.some((inv) => inv.link_invitacion) && (
+                          <button
+                            onClick={handleCopiarTodos}
+                            style={{
+                              background: "none",
+                              border: "1px solid rgba(255,255,255,0.15)",
+                              borderRadius: "var(--radius-sm)",
+                              color: copiadoTodos ? "#22c55e" : "rgba(255,255,255,0.45)",
+                              cursor: "pointer",
+                              fontSize: "0.65rem",
+                              padding: "2px 8px",
+                              fontFamily: "inherit",
+                              transition: "color 0.15s",
+                            }}
+                          >
+                            {copiadoTodos ? "✓ Copiado" : "Copiar todos"}
+                          </button>
+                        )}
+                      </div>
+
+                      {todosInvitados.length === 0 ? (
+                        <p style={{ fontSize: "var(--font-size-sm)", color: "rgba(255,255,255,0.3)", fontStyle: "italic" }}>
+                          Sin invitados registrados
+                        </p>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-xs)" }}>
+                          {todosInvitados.map((inv) => (
+                            <div
+                              key={inv.id}
+                              style={{
+                                backgroundColor: "rgba(255,255,255,0.04)",
+                                borderRadius: "var(--radius-md)",
+                                padding: "var(--space-xs) var(--space-sm)",
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: "3px",
+                              }}
+                            >
+                              <div style={{ display: "flex", alignItems: "center", gap: "var(--space-xs)" }}>
+                                <div style={{
+                                  width: 22, height: 22,
+                                  borderRadius: "var(--radius-full)",
+                                  backgroundColor: "var(--color-primary)",
+                                  display: "flex", alignItems: "center", justifyContent: "center",
+                                  fontSize: "0.55rem", fontWeight: "var(--font-weight-bold)", color: "#fff",
+                                  flexShrink: 0,
+                                }}>
+                                  {getInitials(inv.nombre)}
+                                </div>
+                                <span style={{
+                                  flex: 1, fontSize: "var(--font-size-sm)", color: "rgba(255,255,255,0.8)",
+                                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                                }}>
+                                  {inv.nombre}
+                                </span>
+                              </div>
+
+                              {inv.link_invitacion ? (
+                                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                  <span style={{ fontSize: 9, flexShrink: 0 }}>🔗</span>
+                                  <span style={{
+                                    flex: 1, fontSize: "0.65rem", color: "rgba(255,255,255,0.35)",
+                                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                                  }}>
+                                    {inv.link_invitacion.length > 30
+                                      ? `${inv.link_invitacion.slice(0, 30)}...`
+                                      : inv.link_invitacion}
+                                  </span>
+                                  <button
+                                    onClick={() => handleCopiarLinkInvitado(inv.id, inv.link_invitacion!)}
+                                    style={{
+                                      background: "none",
+                                      border: "1px solid rgba(255,255,255,0.12)",
+                                      borderRadius: "var(--radius-sm)",
+                                      color: copiadoLink[inv.id] ? "#22c55e" : "rgba(255,255,255,0.45)",
+                                      cursor: "pointer", fontSize: "0.6rem", padding: "1px 6px",
+                                      fontFamily: "inherit", flexShrink: 0, transition: "color 0.15s",
+                                    }}
+                                  >
+                                    {copiadoLink[inv.id] ? "✓" : "Copiar"}
+                                  </button>
+                                </div>
+                              ) : (
+                                <span style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.25)", fontStyle: "italic" }}>
+                                  Link no disponible
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Formulario agregar invitado */}
+                      <div style={{
+                        marginTop: "var(--space-sm)",
+                        paddingTop: "var(--space-sm)",
+                        borderTop: "1px solid rgba(255,255,255,0.08)",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "var(--space-xs)",
+                      }}>
+                        <input
+                          type="text"
+                          placeholder="Nombre del invitado"
+                          value={nuevoNombre}
+                          onChange={(e) => setNuevoNombre(e.target.value)}
+                          style={{
+                            backgroundColor: "rgba(255,255,255,0.05)",
+                            border: "1px solid rgba(255,255,255,0.1)",
+                            borderRadius: "var(--radius-sm)",
+                            color: "rgba(255,255,255,0.8)",
+                            fontSize: "var(--font-size-xs)",
+                            padding: "5px 8px",
+                            fontFamily: "inherit",
+                            outline: "none",
+                            width: "100%",
+                            boxSizing: "border-box",
+                          }}
+                        />
+                        <input
+                          type="email"
+                          placeholder="email@ejemplo.com"
+                          value={nuevoEmail}
+                          onChange={(e) => setNuevoEmail(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter") void handleAgregarInvitado(); }}
+                          style={{
+                            backgroundColor: "rgba(255,255,255,0.05)",
+                            border: "1px solid rgba(255,255,255,0.1)",
+                            borderRadius: "var(--radius-sm)",
+                            color: "rgba(255,255,255,0.8)",
+                            fontSize: "var(--font-size-xs)",
+                            padding: "5px 8px",
+                            fontFamily: "inherit",
+                            outline: "none",
+                            width: "100%",
+                            boxSizing: "border-box",
+                          }}
+                        />
+                        <button
+                          onClick={() => void handleAgregarInvitado()}
+                          disabled={agregandoInvitado || !nuevoNombre.trim() || !EMAIL_REGEX.test(nuevoEmail.trim())}
+                          style={{
+                            backgroundColor: agregandoInvitado ? "rgba(255,255,255,0.1)" : "rgba(99,102,241,0.3)",
+                            border: "1px solid rgba(99,102,241,0.4)",
+                            borderRadius: "var(--radius-sm)",
+                            color: agregandoInvitado ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.85)",
+                            cursor: agregandoInvitado ? "not-allowed" : "pointer",
+                            fontSize: "var(--font-size-xs)",
+                            padding: "5px 0",
+                            fontFamily: "inherit",
+                            fontWeight: "var(--font-weight-medium)",
+                            width: "100%",
+                            transition: "background 0.15s",
+                          }}
+                        >
+                          {agregandoInvitado ? "Agregando..." : "+ Agregar invitado"}
+                        </button>
+                        {mensajeAgregar && (
+                          <p style={{
+                            margin: 0,
+                            fontSize: "var(--font-size-xs)",
+                            color: mensajeAgregar.startsWith("✓") ? "#22c55e" : "#ef4444",
+                            textAlign: "center",
+                          }}>
+                            {mensajeAgregar}
+                          </p>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
+              </section>
+
+              {/* Observaciones */}
+              <section>
+                <h3
+                  style={{
+                    fontSize: "var(--font-size-sm)",
+                    fontWeight: "var(--font-weight-bold)",
+                    color: "rgba(255,255,255,0.5)",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                    marginBottom: "var(--space-sm)",
+                  }}
+                >
+                  Observaciones
+                </h3>
+                <textarea
+                  value={observaciones}
+                  onChange={(e) => setObservaciones(e.target.value)}
+                  placeholder="Notas internas de la sesión..."
+                  style={{
+                    width: "100%",
+                    minHeight: "80px",
+                    backgroundColor: "rgba(255,255,255,0.05)",
+                    color: "rgba(255,255,255,0.8)",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                    borderRadius: "var(--radius-md)",
+                    padding: "var(--space-sm)",
+                    fontSize: "var(--font-size-sm)",
+                    fontFamily: "inherit",
+                    outline: "none",
+                    resize: "vertical",
+                    boxSizing: "border-box",
+                  }}
+                />
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  style={{ width: "100%", marginTop: "var(--space-xs)" }}
+                  loading={actualizarObsMutation.isPending}
+                  onClick={handleGuardarObservaciones}
+                >
+                  Guardar
+                </Button>
+              </section>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Panel overlay "Info de sesión" ── */}
+      {showInfoPanel && (
+        <div
+          onClick={() => setShowInfoPanel(false)}
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 100,
+            background: "rgba(0,0,0,0.65)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "#12121e",
+              border: "1px solid rgba(255,255,255,0.1)",
+              borderRadius: 12,
+              width: "100%",
+              maxWidth: 560,
+              maxHeight: "85vh",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+              boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
+            }}
+          >
+            {/* Header del panel */}
+            <div style={{ padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+              <h2 style={{ margin: 0, fontSize: "var(--font-size-base)", fontWeight: "var(--font-weight-bold)", color: "rgba(255,255,255,0.9)" }}>
+                Información de la sesión
+              </h2>
+              <button
+                onClick={() => setShowInfoPanel(false)}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.4)", fontSize: 22, lineHeight: 1, padding: "0 4px" }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Cuerpo scrollable */}
+            <div style={{ flex: 1, overflowY: "auto", padding: 20, display: "flex", flexDirection: "column", gap: 20 }}>
+
+              {/* — Datos de la sesión — */}
+              <div>
+                <p style={{ margin: "0 0 10px", fontSize: 10, fontWeight: "var(--font-weight-semibold)", color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                  Datos de la sesión
+                </p>
+                <div style={{ background: "rgba(255,255,255,0.04)", borderRadius: 8, overflow: "hidden" }}>
+                  {[
+                    { label: "Título", value: sesionDetalle?.titulo_entrevista ?? "—" },
+                    { label: "Evaluador", value: sesionDetalle?.evaluador_nombre ?? "—" },
+                    { label: "Duración", value: sesionDetalle ? `${sesionDetalle.duracion_minutos} min` : "—" },
+                    { label: "Estado", value: sesion?.estado ?? "—" },
+                  ].map(({ label, value }, i) => (
+                    <div
+                      key={label}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        padding: "9px 14px",
+                        borderBottom: i < 3 ? "1px solid rgba(255,255,255,0.05)" : undefined,
+                      }}
+                    >
+                      <span style={{ fontSize: "var(--font-size-sm)", color: "rgba(255,255,255,0.4)" }}>{label}</span>
+                      <span style={{ fontSize: "var(--font-size-sm)", color: "rgba(255,255,255,0.85)", fontWeight: "var(--font-weight-medium)" }}>{value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* — Links para compartir (solo moderator) — */}
+              {decoded.moderator && sesionDetalle && (
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                    <p style={{ margin: 0, fontSize: 10, fontWeight: "var(--font-weight-semibold)", color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                      Links para compartir
+                    </p>
+                    {sesionDetalle.invitados.some((inv) => inv.link_invitacion) && (
+                      <button
+                        onClick={handleCopiarTodos}
+                        style={{
+                          background: "rgba(255,255,255,0.06)",
+                          border: "1px solid rgba(255,255,255,0.1)",
+                          borderRadius: 6,
+                          color: copiadoTodos ? "#22c55e" : "rgba(255,255,255,0.55)",
+                          cursor: "pointer",
+                          fontSize: "var(--font-size-xs)",
+                          padding: "4px 12px",
+                          fontFamily: "inherit",
+                          transition: "color 0.15s",
+                        }}
+                      >
+                        {copiadoTodos ? "✓ Copiado" : "Copiar todos los links"}
+                      </button>
+                    )}
+                  </div>
+
+                  {sesionDetalle.invitados.length === 0 ? (
+                    <p style={{ fontSize: "var(--font-size-sm)", color: "rgba(255,255,255,0.25)", fontStyle: "italic" }}>
+                      Sin invitados en esta sesión
+                    </p>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {sesionDetalle.invitados.map((inv) => (
+                        <div
+                          key={inv.id}
+                          style={{ background: "rgba(255,255,255,0.04)", borderRadius: 8, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <div style={{
+                              width: 28, height: 28, borderRadius: "50%",
+                              background: "var(--color-primary)",
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              fontSize: "0.6rem", fontWeight: "var(--font-weight-bold)", color: "#fff",
+                              flexShrink: 0,
+                            }}>
+                              {getInitials(inv.nombre)}
+                            </div>
+                            <span style={{ fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-medium)", color: "rgba(255,255,255,0.85)" }}>
+                              {inv.nombre}
+                            </span>
+                          </div>
+                          {inv.link_invitacion ? (
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <input
+                                readOnly
+                                value={inv.link_invitacion}
+                                style={{
+                                  flex: 1,
+                                  background: "rgba(255,255,255,0.05)",
+                                  border: "1px solid rgba(255,255,255,0.08)",
+                                  borderRadius: 6,
+                                  color: "rgba(255,255,255,0.45)",
+                                  fontSize: "0.68rem",
+                                  padding: "4px 8px",
+                                  fontFamily: "monospace",
+                                  outline: "none",
+                                }}
+                              />
+                              <button
+                                onClick={() => handleCopiarLinkInvitado(inv.id, inv.link_invitacion!)}
+                                style={{
+                                  background: "rgba(255,255,255,0.06)",
+                                  border: `1px solid ${copiadoLink[inv.id] ? "rgba(34,197,94,0.4)" : "rgba(255,255,255,0.1)"}`,
+                                  borderRadius: 6,
+                                  color: copiadoLink[inv.id] ? "#22c55e" : "rgba(255,255,255,0.55)",
+                                  cursor: "pointer",
+                                  fontSize: "0.7rem",
+                                  padding: "4px 12px",
+                                  fontFamily: "inherit",
+                                  flexShrink: 0,
+                                  transition: "color 0.15s, border-color 0.15s",
+                                }}
+                              >
+                                {copiadoLink[inv.id] ? "✓ Copiado" : "Copiar"}
+                              </button>
+                            </div>
+                          ) : (
+                            <span style={{ fontSize: "0.68rem", color: "rgba(255,255,255,0.2)", fontStyle: "italic" }}>
+                              Sin link generado
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* — Tu link de supervisor — */}
+              {decoded.moderator && sesionDetalle?.link_supervisor && (
+                <div>
+                  <p style={{ margin: "0 0 10px", fontSize: 10, fontWeight: "var(--font-weight-semibold)", color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                    Tu link de supervisor
+                  </p>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <input
+                      readOnly
+                      value={sesionDetalle.link_supervisor}
+                      style={{
+                        flex: 1,
+                        background: "rgba(255,255,255,0.05)",
+                        border: "1px solid rgba(255,255,255,0.08)",
+                        borderRadius: 6,
+                        color: "rgba(255,255,255,0.45)",
+                        fontSize: "0.68rem",
+                        padding: "4px 8px",
+                        fontFamily: "monospace",
+                        outline: "none",
+                      }}
+                    />
+                    <button
+                      onClick={() => handleCopiarSupervisor(sesionDetalle.link_supervisor!)}
+                      style={{
+                        background: "rgba(255,255,255,0.06)",
+                        border: `1px solid ${copiadoSupervisor ? "rgba(34,197,94,0.4)" : "rgba(255,255,255,0.1)"}`,
+                        borderRadius: 6,
+                        color: copiadoSupervisor ? "#22c55e" : "rgba(255,255,255,0.55)",
+                        cursor: "pointer",
+                        fontSize: "0.7rem",
+                        padding: "4px 12px",
+                        fontFamily: "inherit",
+                        flexShrink: 0,
+                        transition: "color 0.15s, border-color 0.15s",
+                      }}
+                    >
+                      {copiadoSupervisor ? "✓ Copiado" : "Copiar mi link"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

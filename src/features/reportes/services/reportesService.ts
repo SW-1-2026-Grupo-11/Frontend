@@ -33,5 +33,9 @@ export const reportesService = {
   /** Persiste el informe en Django (llama al servicio de IA y guarda en BD). */
   generarResumen: (dto: GenerarReporteDto): Promise<Reporte> =>
     api.post<Reporte>("/reportes/resumen/", dto).then((r) => normalizeReporte(r.data)),
+
+  /** Genera reporte con IA usando solo el entrevista_id. */
+  generarPorEntrevista: (entrevistaId: number): Promise<Reporte> =>
+    api.post<Reporte>("/reportes/resumen/", { entrevista_id: entrevistaId }).then((r) => normalizeReporte(r.data)),
 };
 

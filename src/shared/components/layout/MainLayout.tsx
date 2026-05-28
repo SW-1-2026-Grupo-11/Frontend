@@ -14,6 +14,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: UI.NAV_PRUEBAS, to: "/pruebas", icon: "📝" },
   { label: UI.NAV_ENTREVISTAS, to: "/entrevistas", icon: "🗓️" },
   { label: "Reportes IA", to: "/reportes", icon: "🤖" },
+  { label: UI.NAV_SESIONES, to: "/sesiones/nueva", icon: "🎥" },
 ];
 
 type MainLayoutProps = {
