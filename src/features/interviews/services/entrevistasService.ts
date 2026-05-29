@@ -6,6 +6,9 @@ import type {
   CreateEntrevistaDto,
   UpdateEntrevistaDto,
   AsignarPruebaDto,
+  ProgramarEntrevistaDto,
+  ProgramarEntrevistaResponse,
+  InvitadoProgramado,
 } from "../types";
 
 export const entrevistasService = {
@@ -41,4 +44,19 @@ export const entrevistasService = {
 
   removerAsignacion: (pruebaEntrevistaId: number): Promise<void> =>
     api.delete(`/pruebas/pruebas-entrevista/${pruebaEntrevistaId}/`).then(() => undefined),
+
+  programarEntrevista: (dto: ProgramarEntrevistaDto): Promise<ProgramarEntrevistaResponse> =>
+    api
+      .post<ProgramarEntrevistaResponse>("/entrevistas/entrevistas/programar/", dto)
+      .then((r) => r.data),
+
+  getInvitadosPorEntrevista: (entrevistaId: number): Promise<InvitadoProgramado[]> =>
+    api
+      .get<InvitadoProgramado[] | { results: InvitadoProgramado[] }>("/entrevistas/invitados/", {
+        params: { entrevista: entrevistaId },
+      })
+      .then((r) => {
+        const d = r.data;
+        return Array.isArray(d) ? d : (d as { results: InvitadoProgramado[] }).results ?? [];
+      }),
 };

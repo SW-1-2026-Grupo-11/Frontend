@@ -6,8 +6,12 @@ import DashboardPage from "@/pages/DashboardPage";
 import UsuariosPage from "@/pages/UsuariosPage";
 import PruebasPage from "@/pages/PruebasPage";
 import EntrevistasPage from "@/pages/EntrevistasPage";
-import SessionPage from "@/pages/SessionPage";
 import ReportesPage from "@/pages/ReportesPage";
+import SesionesPage from "@/pages/SesionesPage";
+import SesionNuevaPage from "@/pages/SesionNuevaPage";
+import JoinPage from "@/pages/JoinPage";
+import SalaPage from "@/pages/SalaPage";
+import SesionDetallePage from "@/pages/SesionDetallePage";
 
 const rootRoute = createRootRoute();
 
@@ -73,12 +77,9 @@ const supervisionRoute = createRoute({
 const sessionRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/session/$sessionId",
-  beforeLoad: requireAuth,
-  validateSearch: (search: Record<string, unknown>) => ({
-    entrevistaId: Number(search.entrevistaId ?? 0),
-    participanteId: Number(search.participanteId ?? 1),
-  }),
-  component: SessionPage,
+  beforeLoad: () => {
+    throw redirect({ to: "/dashboard" });
+  },
 });
 
 const reportesRoute = createRoute({
@@ -86,6 +87,43 @@ const reportesRoute = createRoute({
   path: "/reportes",
   beforeLoad: requireAuth,
   component: ReportesPage,
+});
+
+const sesionesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/sesiones",
+  beforeLoad: requireAuth,
+  component: SesionesPage,
+});
+
+const sesionNuevaRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/sesiones/nueva",
+  beforeLoad: requireAuth,
+  component: SesionNuevaPage,
+});
+
+const joinRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/join",
+  validateSearch: (search: Record<string, unknown>) => ({
+    token: String(search.token ?? ""),
+  }),
+  component: JoinPage,
+});
+
+const sesionSalaRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/sesiones/$sesionId/sala",
+  beforeLoad: requireAuth,
+  component: SalaPage,
+});
+
+const sesionDetalleRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/sesiones/$sesionId/detalle",
+  beforeLoad: requireAuth,
+  component: SesionDetallePage,
 });
 
 const routeTree = rootRoute.addChildren([
@@ -98,6 +136,11 @@ const routeTree = rootRoute.addChildren([
   entrevistasRoute,
   sessionRoute,
   reportesRoute,
+  sesionesRoute,
+  sesionNuevaRoute,
+  joinRoute,
+  sesionSalaRoute,
+  sesionDetalleRoute,
 ]);
 
 export const router = createRouter({ routeTree });

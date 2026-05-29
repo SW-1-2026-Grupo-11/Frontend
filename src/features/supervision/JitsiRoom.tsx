@@ -1,26 +1,60 @@
-import { useRef } from "react";
-import { UI } from "@/config/constants";
-import { useJitsi } from "@/features/supervision";
-import type { JitsiCallbacks } from "./types";
+import { forwardRef, useImperativeHandle, useRef } from "react";
+import Spinner from "@/shared/components/ui/Spinner";
+import useJitsiIframe from "./useJitsiIframe";
+import type { JitsiCallbacksIframe } from "./useJitsiIframe";
+import type { JitsiRoomHandle } from "./types";
 
 type JitsiRoomProps = {
-  sessionId: string;
-  displayName?: string;
-  jwt?: string;
-  callbacks?: JitsiCallbacks;
+  roomName: string;
+  displayName: string;
+  email?: string;
+  isModerator: boolean;
+  onParticipantJoined?: (id: string, displayName: string) => void;
+  onParticipantLeft?: (id: string) => void;
+  onVideoMuteChanged?: (muted: boolean) => void;
+  onScreenShareChanged?: (on: boolean) => void;
+  onReadyToClose?: () => void;
+  onConferenceJoined?: () => void;
+  className?: string;
 };
 
-export default function JitsiRoom({ sessionId, displayName, jwt, callbacks }: JitsiRoomProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const { isLoading, hasError } = useJitsi({
-    roomName: sessionId,
+const JitsiRoom = forwardRef<JitsiRoomHandle, JitsiRoomProps>(function JitsiRoom(
+  {
+    roomName,
     displayName,
-    jwt,
-    containerRef,
-    callbacks,
-  });
+    email,
+    isModerator,
+    onParticipantJoined,
+    onParticipantLeft,
+    onVideoMuteChanged,
+    onScreenShareChanged,
+    onReadyToClose,
+    onConferenceJoined,
+  },
+  ref,
+) {
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  if (hasError) {
+  const callbacks: JitsiCallbacksIframe = {
+    onParticipantJoined,
+    onParticipantLeft,
+    onVideoMuteChanged,
+    onScreenShareChanged,
+    onReadyToClose,
+    onConferenceJoined,
+  };
+
+  const { isLoaded, isError, hangup, kickParticipant, getParticipantCount, captureScreenshot } =
+    useJitsiIframe({ containerRef, roomName, displayName, email, isModerator, callbacks });
+
+  useImperativeHandle(ref, () => ({
+    hangup,
+    kickParticipant,
+    getParticipantCount,
+    captureScreenshot,
+  }));
+
+  if (isError) {
     return (
       <div
         style={{
@@ -33,14 +67,14 @@ export default function JitsiRoom({ sessionId, displayName, jwt, callbacks }: Ji
           fontSize: "var(--font-size-lg)",
         }}
       >
-        Error al cargar la videollamada. Verifica tu conexión.
+        Error al cargar la videollamada. Verifica tu conexión a Jitsi.
       </div>
     );
   }
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
-      {isLoading && (
+      {!isLoaded && (
         <div
           style={{
             position: "absolute",
@@ -49,19 +83,16 @@ export default function JitsiRoom({ sessionId, displayName, jwt, callbacks }: Ji
             alignItems: "center",
             justifyContent: "center",
             backgroundColor: "var(--color-surface)",
-            color: "var(--color-text-muted)",
-            fontSize: "var(--font-size-lg)",
             zIndex: 1,
             pointerEvents: "none",
           }}
         >
-          {UI.LOADING_JITSI}
+          <Spinner size="lg" />
         </div>
       )}
-      <div
-        ref={containerRef}
-        style={{ width: "100%", height: "100%" }}
-      />
+      <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
     </div>
   );
-}
+});
+
+export default JitsiRoom;

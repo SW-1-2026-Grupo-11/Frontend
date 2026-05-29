@@ -294,4 +294,57 @@ export const UI = {
   USUARIOS_TITLE: "Gestionar Usuarios",
   PRUEBAS_TITLE: "Gestionar Pruebas",
   ENTREVISTAS_TITLE: "Gestionar Entrevistas",
+  SESIONES_TITLE: "Gestionar Sesiones",
+  JOIN_TITLE: "Unirse a sesión",
+  // Sidebar
+  NAV_SESIONES: "Sesiones",
+  NAV_REPORTES: "Reportes IA",
+} as const;
+
+export const SESIONES = {
+  ESTADOS: ["activa", "iniciada", "finalizada"] as const,
+  ESTADO_LABELS: {
+    activa: "Activa",
+    iniciada: "En curso",
+    finalizada: "Finalizada",
+  } as const,
+  ESTADO_BADGE: {
+    activa: "info",
+    iniciada: "warning",
+    finalizada: "success",
+  } as const,
+  BTN_NUEVA: "Nueva sesión",
+  BTN_INICIAR: "Iniciar sesión",
+  BTN_FINALIZAR: "Finalizar sesión",
+  BTN_UNIRSE: "Unirse a sala",
+  BTN_AGREGAR_INVITADO: "Agregar invitado",
+  BTN_GUARDAR_OBS: "Guardar observaciones",
+  BTN_CANCELAR: "Cancelar",
+  LABEL_OBSERVACIONES: "Observaciones internas",
+  EMPTY: "No hay sesiones registradas",
+  ERROR: "Error al cargar la sesión",
+  MODAL_NUEVA_TITLE: "Nueva sesión",
+} as const;
+
+export const ALERTAS = {
+  TIPOS: {
+    sin_rostro: "Sin rostro en cámara",
+    multiples_rostros: "Múltiples rostros",
+    mirada_fuera_pantalla: "Mirada desviada",
+    uso_de_celular: "Teléfono detectado",
+    posible_celular_o_lectura: "Posible lectura / celular",
+    cambio_ventana: "Cambio de pestaña",
+    camara_apagada: "Cámara apagada",
+    pantalla_compartida: "Pantalla compartida",
+    participante_salio: "Participante se fue",
+  } as const,
+  SEVERIDAD_BADGE: {
+    alta: "danger",
+    media: "warning",
+    baja: "info",
+  } as const,
+  TITLE: "Alertas de proctoring",
+  EMPTY: "No hay alertas registradas",
+  ERROR: "Error al cargar las alertas",
+  POLLING_INTERVAL_MS: 3000,
 } as const;

@@ -3,9 +3,33 @@ import { createPortal } from "react-dom";
 import { Badge, Button, Spinner } from "@/shared/components/ui";
 import { ENTREVISTAS, PRUEBAS } from "@/config/constants";
 import { useGetPruebas } from "@/features/exams";
-import { useGetPruebasEntrevista, useRemoverAsignacion } from "../hooks/useEntrevistas";
+import {
+  useGetPruebasEntrevista,
+  useRemoverAsignacion,
+  useGetInvitadosPorEntrevista,
+} from "../hooks/useEntrevistas";
 import type { Entrevista, EstadoAsignacion, EstadoEntrevista, PruebaEntrevista } from "../types";
 import AsignarPruebaModal from "./AsignarPruebaModal";
+
+const INV_AVATAR_COLORS = ["#1d4ed8", "#7c3aed", "#0891b2", "#be185d", "#15803d", "#b45309"];
+
+const INV_ESTADO_BADGE: Record<string, "neutral" | "info" | "success" | "danger"> = {
+  pendiente: "neutral",
+  aceptado: "info",
+  completado: "success",
+  rechazado: "danger",
+};
+
+const INV_ESTADO_LABEL: Record<string, string> = {
+  pendiente: "Pendiente",
+  aceptado: "Aceptado",
+  completado: "Completado",
+  rechazado: "Rechazado",
+};
+
+function invInitials(nombre: string): string {
+  return nombre.split(" ").map((n) => n[0] ?? "").join("").slice(0, 2).toUpperCase();
+}
 
 type EntrevistaDetailDrawerProps = {
   entrevista: Entrevista;
@@ -43,8 +67,29 @@ export default function EntrevistaDetailDrawer({
 }: EntrevistaDetailDrawerProps) {
   const { data: asignaciones, isLoading } = useGetPruebasEntrevista(entrevista.id);
   const { data: pruebas } = useGetPruebas();
+  const { data: invitados = [], isLoading: loadingInvitados } = useGetInvitadosPorEntrevista(entrevista.id);
   const removerAsignacion = useRemoverAsignacion();
   const [isAsignarOpen, setIsAsignarOpen] = useState(false);
+  const [copiadoInv, setCopiadoInv] = useState<Record<number, boolean>>({});
+  const [copiadoTodosInv, setCopiadoTodosInv] = useState(false);
+
+  const handleCopiarInvitado = (id: number, link: string) => {
+    void navigator.clipboard.writeText(link).then(() => {
+      setCopiadoInv((prev) => ({ ...prev, [id]: true }));
+      setTimeout(() => setCopiadoInv((prev) => ({ ...prev, [id]: false })), 2000);
+    });
+  };
+
+  const handleCopiarTodosInv = () => {
+    const text = invitados
+      .filter((inv) => inv.link_invitacion)
+      .map((inv) => `${inv.nombre}: ${inv.link_invitacion ?? ""}`)
+      .join("\n");
+    void navigator.clipboard.writeText(text).then(() => {
+      setCopiadoTodosInv(true);
+      setTimeout(() => setCopiadoTodosInv(false), 2000);
+    });
+  };
 
   const pruebaMap = new Map((pruebas ?? []).map((p) => [p.id, p]));
   const asignacionesList = asignaciones ?? [];
@@ -304,6 +349,117 @@ export default function EntrevistaDetailDrawer({
                   </div>
                 );
               })}
+            </div>
+          )}
+        </div>
+
+        {/* Sección links de invitados */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <p style={{ margin: 0, fontSize: "var(--font-size-base)", fontWeight: "var(--font-weight-bold)", color: "var(--color-text)" }}>
+              Links de invitados
+            </p>
+            {invitados.some((inv) => inv.link_invitacion) && (
+              <button
+                onClick={handleCopiarTodosInv}
+                style={{
+                  padding: "4px 12px",
+                  background: "transparent",
+                  border: "1px solid var(--color-border)",
+                  borderRadius: "var(--radius-md)",
+                  cursor: "pointer",
+                  fontSize: "var(--font-size-xs)",
+                  color: copiadoTodosInv ? "var(--color-success)" : "var(--color-text-muted)",
+                  fontFamily: "inherit",
+                  transition: "color 0.15s",
+                }}
+              >
+                {copiadoTodosInv ? "✓ Copiado" : "Copiar todos"}
+              </button>
+            )}
+          </div>
+
+          {loadingInvitados ? (
+            <div style={{ display: "flex", justifyContent: "center", padding: "var(--space-lg)" }}>
+              <Spinner size="md" />
+            </div>
+          ) : invitados.length === 0 ? (
+            <p style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)", textAlign: "center", padding: "var(--space-lg)", backgroundColor: "var(--color-background)", borderRadius: "var(--radius-md)", border: "1px dashed var(--color-border)" }}>
+              No hay invitados para esta entrevista
+            </p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-xs)", backgroundColor: "var(--color-background)", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", overflow: "hidden" }}>
+              {invitados.map((inv, idx) => (
+                <div
+                  key={inv.id}
+                  style={{ padding: "var(--space-sm) var(--space-md)", borderBottom: "1px solid var(--color-border)", display: "flex", flexDirection: "column", gap: 6 }}
+                >
+                  {/* Fila superior: avatar + nombre + email + badge */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
+                    <div style={{
+                      width: 32, height: 32, borderRadius: "50%",
+                      background: INV_AVATAR_COLORS[idx % INV_AVATAR_COLORS.length],
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: "var(--font-size-xs)", fontWeight: "var(--font-weight-bold)",
+                      color: "#fff", flexShrink: 0,
+                    }}>
+                      {invInitials(inv.nombre)}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: 0, fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-medium)", color: "var(--color-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {inv.nombre}
+                      </p>
+                      <p style={{ margin: 0, fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {inv.email}
+                      </p>
+                    </div>
+                    <Badge variant={INV_ESTADO_BADGE[inv.estado] ?? "neutral"}>
+                      {INV_ESTADO_LABEL[inv.estado] ?? inv.estado}
+                    </Badge>
+                  </div>
+
+                  {/* Fila inferior: link + botón copiar */}
+                  {inv.link_invitacion ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-xs)" }}>
+                      <input
+                        readOnly
+                        value={inv.link_invitacion}
+                        style={{
+                          flex: 1,
+                          background: "var(--color-surface)",
+                          border: "1px solid var(--color-border)",
+                          borderRadius: "var(--radius-sm)",
+                          color: "var(--color-text-muted)",
+                          fontSize: "var(--font-size-xs)",
+                          padding: "4px 8px",
+                          fontFamily: "monospace",
+                          outline: "none",
+                          cursor: "text",
+                        }}
+                      />
+                      <button
+                        onClick={() => handleCopiarInvitado(inv.id, inv.link_invitacion!)}
+                        style={{
+                          padding: "4px 12px",
+                          background: "transparent",
+                          border: `1px solid ${copiadoInv[inv.id] ? "var(--color-success)" : "var(--color-primary)"}`,
+                          borderRadius: "var(--radius-sm)",
+                          cursor: "pointer",
+                          fontSize: "var(--font-size-xs)",
+                          color: copiadoInv[inv.id] ? "var(--color-success)" : "var(--color-primary)",
+                          fontFamily: "inherit",
+                          flexShrink: 0,
+                          transition: "color 0.15s, border-color 0.15s",
+                        }}
+                      >
+                        {copiadoInv[inv.id] ? "✓ Copiado" : "Copiar"}
+                      </button>
+                    </div>
+                  ) : (
+                    <Badge variant="neutral">Sin link generado</Badge>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>

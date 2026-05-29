@@ -8,5 +8,7 @@ export type Reporte = {
   resumen_participante: string;
   recomendaciones: string;
   nivel_riesgo: NivelRiesgo | null;
+  puntaje_atencion?: number | null;
+  puntaje_sospecha?: number | null;
   fecha_creacion: string;
 };
