@@ -6,30 +6,12 @@ import { useGetSesionDetalle, useActualizarObservaciones } from "@/features/sesi
 import type { InvitadoSesion } from "@/features/sesiones";
 import { useAlertas } from "@/features/alertas";
 import type { Alerta } from "@/features/alertas";
-import { useGetEntrevistaById } from "@/features/interviews";
-import type { Entrevista } from "@/features/interviews";
 import { useGenerarReporte, useGetReportes, useGenerarReporteIA } from "@/features/reportes";
 import type { Reporte } from "@/features/reportes";
 import { getEntrevistaId } from "@/features/reportes";
 import { SESIONES, ALERTAS } from "@/config/constants";
 
 // ─── Local types ──────────────────────────────────────────────────────────────
-
-type Etapa = {
-  id: number;
-  titulo: string;
-  orden: number;
-  estado: "completada" | "en_curso" | "pendiente";
-  duracion_estimada_minutos: number | null;
-};
-
-type EntrevistaDetalle = Entrevista & {
-  area_entrevista?: string;
-  tipo_prueba?: string;
-  porcentaje_teorica?: number;
-  porcentaje_practica?: number;
-  etapas?: Etapa[];
-};
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -39,12 +21,6 @@ const NIVEL_RIESGO_COLOR: Record<string, string> = {
   bajo: "var(--color-success)",
   medio: "#f97316",
   alto: "var(--color-danger)",
-};
-
-const ETAPA_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
-  completada: { label: "Completada", color: "var(--color-success)", icon: "✓" },
-  en_curso: { label: "En curso", color: "#f59e0b", icon: "↻" },
-  pendiente: { label: "Pendiente", color: "var(--color-text-muted)", icon: "○" },
 };
 
 const INVITADO_ESTADO_LABEL: Record<string, string> = {
@@ -135,8 +111,6 @@ export default function SesionDetallePage() {
     useGetSesionDetalle(sesionId);
 
   const entrevistaId = sesionDetalle?.entrevista ?? 0;
-  const { data: entrevistaBase } = useGetEntrevistaById(entrevistaId);
-  const entrevista = entrevistaBase as EntrevistaDetalle | undefined;
 
   const { data: alertas = [] } = useAlertas(
     entrevistaId ? { entrevista: entrevistaId } : undefined,
@@ -165,7 +139,6 @@ export default function SesionDetallePage() {
     integridad: number;
   }>({ open: false, reporte: null, integridad: 100 });
   const [generandoReporte, setGenerandoReporte] = useState<Record<string, boolean>>({});
-  const [generandoGlobal, setGenerandoGlobal] = useState(false);
   const [mostrarMas, setMostrarMas] = useState<Record<number, boolean>>({});
   const obsInitRef = useRef(false);
 
@@ -248,26 +221,6 @@ export default function SesionDetallePage() {
     }
   }
 
-  async function handleGenerarReporteGlobal() {
-    if (!sesionDetalle) return;
-    const altaCount = alertas.filter((a) => a.severidad === "alta").length;
-    const mediaCount = alertas.filter((a) => a.severidad === "media").length;
-    const integridad = Math.max(0, 100 - altaCount * 10 - mediaCount * 5);
-    setGenerandoGlobal(true);
-    try {
-      const reporte = await generarReporteMutation.mutateAsync({
-        entrevista_id: String(entrevistaId),
-        participante_id: "0",
-        puntaje_total: integridad,
-        total_alertas: alertas.length,
-        nivel_riesgo: integridad < 70 ? "alto" : integridad < 85 ? "medio" : "bajo",
-      });
-      setReporteModal({ open: true, reporte, integridad });
-    } finally {
-      setGenerandoGlobal(false);
-    }
-  }
-
   async function handleGenerarReporteIA() {
     if (!entrevistaId) return;
     const integridad = calcularIntegridad(alertas);
@@ -303,12 +256,9 @@ export default function SesionDetallePage() {
   }
 
   // ── Derived values ──
-  const etapas: Etapa[] = entrevista?.etapas ?? [];
   const durMinutes = calcDurMinutes(sesionDetalle.fecha_inicio, sesionDetalle.fecha_fin);
   const primerInvitado = sesionDetalle.invitados[0];
   const linkInvitacion = primerInvitado?.link_invitacion ?? null;
-  const porcTeorica = entrevista?.porcentaje_teorica ?? 50;
-  const porcPractica = entrevista?.porcentaje_practica ?? 50;
   const estadoColor =
     sesionDetalle.estado === "activa"
       ? "var(--color-primary)"
@@ -441,22 +391,10 @@ export default function SesionDetallePage() {
               )}
             </div>
 
-            {/* Área */}
+            {/* Descripción */}
             <div>
-              <p style={metaLabel}>ÁREA DE LA ENTREVISTA</p>
-              <p style={metaValue}>{entrevista?.area_entrevista ?? "—"}</p>
-              <p style={metaSubtext}>{sesionDetalle.descripcion_entrevista ?? ""}</p>
-            </div>
-
-            {/* Tipo de prueba */}
-            <div>
-              <p style={metaLabel}>TIPO DE PRUEBA</p>
-              <p style={metaValue}>{entrevista?.tipo_prueba ?? "—"}</p>
-              <p style={metaSubtext}>Teórica {porcTeorica}% · Práctica {porcPractica}%</p>
-              <div style={{ marginTop: 6, height: 6, borderRadius: 3, overflow: "hidden", background: "var(--color-border)", display: "flex" }}>
-                <div style={{ width: `${porcTeorica}%`, background: "var(--color-primary)" }} />
-                <div style={{ width: `${porcPractica}%`, background: "var(--color-success)" }} />
-              </div>
+              <p style={metaLabel}>DESCRIPCIÓN</p>
+              <p style={metaSubtext}>{sesionDetalle.descripcion_entrevista ?? "—"}</p>
             </div>
 
             {/* Link de invitación */}
@@ -551,57 +489,6 @@ export default function SesionDetallePage() {
               </div>
             </div>
           </div>
-        </div>
-
-        {/* ── SECCIÓN 3: Etapas ──────────────────────────────────────────────── */}
-        <div style={card}>
-          <h2 style={cardTitle}>Estado de cada sección o etapa</h2>
-          {etapas.length === 0 ? (
-            <p style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)" }}>
-              Sin etapas definidas para esta entrevista.
-            </p>
-          ) : (
-            <div style={{ display: "flex", alignItems: "flex-start", gap: 8, flexWrap: "wrap" }}>
-              {[...etapas]
-                .sort((a, b) => a.orden - b.orden)
-                .map((etapa, idx) => {
-                  const cfg = ETAPA_CONFIG[etapa.estado] ?? ETAPA_CONFIG.pendiente;
-                  return (
-                    <div key={etapa.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <div style={{
-                        border: `2px solid ${cfg.color}`,
-                        borderRadius: 8,
-                        padding: "8px 12px",
-                        minWidth: 100,
-                        textAlign: "center",
-                        background: `${cfg.color}0f`,
-                      }}>
-                        <p style={{ margin: 0, fontSize: 10, color: "var(--color-text-muted)", marginBottom: 2 }}>
-                          Etapa {etapa.orden}
-                        </p>
-                        <p style={{ margin: 0, fontSize: "var(--font-size-xs)", fontWeight: "var(--font-weight-semibold)", color: "var(--color-text)" }}>
-                          {etapa.titulo}
-                        </p>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 3, marginTop: 4 }}>
-                          <span style={{ fontSize: 10 }}>{cfg.icon}</span>
-                          <span style={{ fontSize: 10, color: cfg.color, fontWeight: "var(--font-weight-semibold)" }}>
-                            {cfg.label}
-                          </span>
-                        </div>
-                        {etapa.duracion_estimada_minutos != null && (
-                          <p style={{ margin: "3px 0 0", fontSize: 9, color: "var(--color-text-muted)" }}>
-                            {etapa.duracion_estimada_minutos} min
-                          </p>
-                        )}
-                      </div>
-                      {idx < etapas.length - 1 && (
-                        <span style={{ color: "var(--color-text-muted)", fontSize: 18, lineHeight: 1 }}>→</span>
-                      )}
-                    </div>
-                  );
-                })}
-            </div>
-          )}
         </div>
 
         {/* ── SECCIÓN 4: Participantes ───────────────────────────────────────── */}

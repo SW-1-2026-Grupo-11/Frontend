@@ -14,6 +14,7 @@ export type Prueba = {
   duracion_minutos: number;
   puntaje_maximo: number;
   estado: EstadoPrueba;
+  reutilizable: boolean;
   fecha_creacion: string;
   fecha_actualizacion: string;
 };
@@ -28,6 +29,7 @@ export type CreatePruebaDto = {
   duracion_minutos: number;
   puntaje_maximo: number;
   estado?: EstadoPrueba;
+  reutilizable?: boolean;
 };
 
 export type UpdatePruebaDto = Partial<Omit<CreatePruebaDto, "creada_por">>;
@@ -63,10 +65,13 @@ export type Pregunta = {
   fecha_actualizacion: string;
 };
 
+export type TipoSeccion = "teorica" | "practica";
+
 export type Seccion = {
   id: number;
   prueba: number;
   titulo: string;
+  tipo: TipoSeccion;
   descripcion: string | null;
   orden: number;
   peso_porcentual: number;
@@ -78,6 +83,7 @@ export type Seccion = {
 export type CreateSeccionDto = {
   prueba: number;
   titulo: string;
+  tipo?: TipoSeccion;
   descripcion?: string;
   orden?: number;
   peso_porcentual?: number;

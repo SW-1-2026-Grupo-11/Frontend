@@ -10,7 +10,7 @@ import {
   useCreateOpcion,
   useDeleteOpcion,
 } from "../hooks/useExams";
-import type { FormatoPregunta, Pregunta, Prueba, Seccion } from "../types";
+import type { FormatoPregunta, Pregunta, Prueba, Seccion, TipoSeccion } from "../types";
 
 const FORMATO_LABELS: Record<FormatoPregunta, string> = {
   opcion_multiple: "Opción múltiple",
@@ -201,6 +201,7 @@ export default function PruebaContenidoModal({ prueba, onClose }: Props) {
   const { data: secciones = [], isLoading } = useGetSecciones(prueba.id);
   const createSeccion = useCreateSeccion();
   const [titulo, setTitulo] = useState("");
+  const [tipoSeccion, setTipoSeccion] = useState<TipoSeccion>("teorica");
   const [peso, setPeso] = useState(100);
 
   const totalPeso = secciones.reduce((s, sec) => s + sec.peso_porcentual, 0);
@@ -210,10 +211,12 @@ export default function PruebaContenidoModal({ prueba, onClose }: Props) {
     createSeccion.mutate({
       prueba: prueba.id,
       titulo,
+      tipo: tipoSeccion,
       peso_porcentual: peso,
       orden: secciones.length + 1,
     });
     setTitulo("");
+    setTipoSeccion("teorica");
     setPeso(100);
   };
 
@@ -266,6 +269,10 @@ export default function PruebaContenidoModal({ prueba, onClose }: Props) {
         {/* Nueva sección */}
         <div style={{ display: "flex", gap: "var(--space-xs)", alignItems: "center", borderTop: "1px solid var(--color-border)", paddingTop: "var(--space-md)" }}>
           <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título de la sección (ej: Teoría)" style={{ ...inputStyle, flex: 1 }} />
+          <select value={tipoSeccion} onChange={(e) => setTipoSeccion(e.target.value as TipoSeccion)} style={{ ...inputStyle, width: "auto" }} title="Tipo">
+            <option value="teorica">Teórica</option>
+            <option value="practica">Práctica</option>
+          </select>
           <input type="number" min={0} max={100} value={peso} onChange={(e) => setPeso(Number(e.target.value))} style={{ ...inputStyle, width: 90 }} title="Peso %" />
           <Button variant="primary" onClick={addSeccion} disabled={createSeccion.isPending}>+ Sección</Button>
         </div>
