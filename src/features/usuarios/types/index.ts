@@ -1,4 +1,4 @@
-export type Rol = "supervisor" | "invitado";
+export type Rol = "admin" | "reclutador" | "evaluador";
 export type EstadoUsuario = "activo" | "inactivo";
 
 export type Usuario = {
