@@ -282,7 +282,7 @@ export default function ReportesPage() {
           alertas={alertas}
           isLoading={loadingReportes}
           isError={errorReportes}
-          onVerDetalle={handleVerDetalle}
+          onVerDetalle={setSelectedReporte}
         />
       </section>
 

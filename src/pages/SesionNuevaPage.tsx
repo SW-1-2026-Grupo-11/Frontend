@@ -6,7 +6,10 @@ import {
   useGetPruebasEntrevista,
   useProgramarEntrevista,
 } from "@/features/interviews";
-import type { ProgramarEntrevistaDto, InvitadoProgramado } from "@/features/interviews";
+import type {
+  ProgramarEntrevistaDto,
+  InvitadoProgramado,
+} from "@/features/interviews";
 import { useGetUsuarios } from "@/features/usuarios";
 import { useGetPruebas } from "@/features/exams";
 import { useCrearSesion } from "@/features/sesiones";
@@ -43,7 +46,14 @@ type ValidationErrors = {
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
-const AVATAR_COLORS = ["#1d4ed8", "#7c3aed", "#0891b2", "#be185d", "#15803d", "#b45309"];
+const AVATAR_COLORS = [
+  "#1d4ed8",
+  "#7c3aed",
+  "#0891b2",
+  "#be185d",
+  "#15803d",
+  "#b45309",
+];
 
 const DURACION_OPTIONS = [
   { value: 30, label: "30 minutos" },
@@ -101,8 +111,12 @@ export default function SesionNuevaPage() {
   const [nuevoNombre, setNuevoNombre] = useState("");
   const [nuevoEmail, setNuevoEmail] = useState("");
   const [linkSupervisor, setLinkSupervisor] = useState<string | null>(null);
-  const [invitadosLinks, setInvitadosLinks] = useState<InvitadoProgramado[]>([]);
-  const [copiadoInvitadoNueva, setCopiadoInvitadoNueva] = useState<Record<number, boolean>>({});
+  const [invitadosLinks, setInvitadosLinks] = useState<InvitadoProgramado[]>(
+    [],
+  );
+  const [copiadoInvitadoNueva, setCopiadoInvitadoNueva] = useState<
+    Record<number, boolean>
+  >({});
   const [copiadoTodosNueva, setCopiadoTodosNueva] = useState(false);
   const [enviado, setEnviado] = useState(false);
   const [copiado, setCopiado] = useState(false);
@@ -112,12 +126,12 @@ export default function SesionNuevaPage() {
   const emailPreviewRef = useRef<HTMLDivElement>(null);
 
   // ── Carga de datos ──
-  const { data: entrevistas, isLoading: loadingEntrevistas } = useGetEntrevistas();
+  const { data: entrevistas, isLoading: loadingEntrevistas } =
+    useGetEntrevistas();
   const { data: usuarios, isLoading: loadingUsuarios } = useGetUsuarios();
   const { data: pruebas } = useGetPruebas();
-  const { data: pruebasEntrevista, isLoading: loadingPruebas } = useGetPruebasEntrevista(
-    entrevistaBaseId ?? 0,
-  );
+  const { data: pruebasEntrevista, isLoading: loadingPruebas } =
+    useGetPruebasEntrevista(entrevistaBaseId ?? 0);
 
   // ── Mutaciones ──
   const programarMutation = useProgramarEntrevista();
@@ -151,7 +165,8 @@ export default function SesionNuevaPage() {
     setCandidatos((prev) => [...prev, { nombre, email }]);
     setNuevoNombre("");
     setNuevoEmail("");
-    if (errores.candidatos) setErrores((prev) => ({ ...prev, candidatos: undefined }));
+    if (errores.candidatos)
+      setErrores((prev) => ({ ...prev, candidatos: undefined }));
   };
 
   const handleEliminarCandidato = (index: number) => {
@@ -170,7 +185,8 @@ export default function SesionNuevaPage() {
     if (!titulo.trim()) nuevos.titulo = "El título es requerido";
     if (!evaluadorId) nuevos.evaluador = "Selecciona un evaluador";
     if (!fechaProgramada) nuevos.fecha = "La fecha es requerida";
-    if (candidatos.length === 0) nuevos.candidatos = "Agrega al menos un candidato";
+    if (candidatos.length === 0)
+      nuevos.candidatos = "Agrega al menos un candidato";
     setErrores(nuevos);
     return Object.keys(nuevos).length === 0;
   };
@@ -192,7 +208,9 @@ export default function SesionNuevaPage() {
         const supervisorLink = fixLink(data.link_supervisor);
         const invitadosFixed = data.invitados.map((inv) => ({
           ...inv,
-          link_invitacion: inv.link_invitacion ? fixLink(inv.link_invitacion) : inv.link_invitacion,
+          link_invitacion: inv.link_invitacion
+            ? fixLink(inv.link_invitacion)
+            : inv.link_invitacion,
         }));
         setLinkSupervisor(supervisorLink);
         setInvitadosLinks(invitadosFixed);
@@ -205,7 +223,10 @@ export default function SesionNuevaPage() {
         crearSesionMutation.mutate({ entrevista_id: data.entrevista.id });
       },
       onError: () => {
-        setToast({ mensaje: "Error al programar la entrevista. Intenta de nuevo.", tipo: "error" });
+        setToast({
+          mensaje: "Error al programar la entrevista. Intenta de nuevo.",
+          tipo: "error",
+        });
       },
     });
   };
@@ -213,7 +234,10 @@ export default function SesionNuevaPage() {
   function handleCopiarInvitadoNueva(invId: number, link: string) {
     void navigator.clipboard.writeText(link).then(() => {
       setCopiadoInvitadoNueva((prev) => ({ ...prev, [invId]: true }));
-      setTimeout(() => setCopiadoInvitadoNueva((prev) => ({ ...prev, [invId]: false })), 2000);
+      setTimeout(
+        () => setCopiadoInvitadoNueva((prev) => ({ ...prev, [invId]: false })),
+        2000,
+      );
     });
   }
 
@@ -222,7 +246,9 @@ export default function SesionNuevaPage() {
       .filter((inv) => inv.link_invitacion)
       .map((inv) => `${inv.nombre}: ${inv.link_invitacion ?? ""}`)
       .join("\n");
-    const supervisorLine = linkSupervisor ? `\nTu link como supervisor: ${linkSupervisor}` : "";
+    const supervisorLine = linkSupervisor
+      ? `\nTu link como supervisor: ${linkSupervisor}`
+      : "";
     const text = `Links de evaluación — ${titulo.trim()}\n\n${invLines}${supervisorLine}`;
     void navigator.clipboard.writeText(text).then(() => {
       setCopiadoTodosNueva(true);
@@ -244,7 +270,10 @@ export default function SesionNuevaPage() {
             top: "var(--space-lg)",
             right: "var(--space-lg)",
             zIndex: 1000,
-            backgroundColor: toast.tipo === "success" ? "var(--color-success)" : "var(--color-danger)",
+            backgroundColor:
+              toast.tipo === "success"
+                ? "var(--color-success)"
+                : "var(--color-danger)",
             color: "#fff",
             padding: "var(--space-sm) var(--space-lg)",
             borderRadius: "var(--radius-md)",
@@ -269,14 +298,25 @@ export default function SesionNuevaPage() {
         >
           Programar sesión de evaluación
         </h1>
-        <p style={{ fontSize: "var(--font-size-base)", color: "var(--color-text-muted)", margin: 0 }}>
+        <p
+          style={{
+            fontSize: "var(--font-size-base)",
+            color: "var(--color-text-muted)",
+            margin: 0,
+          }}
+        >
           Completa los datos, agrega candidatos y envía los links de acceso.
         </p>
       </div>
 
       {/* ── Layout de dos columnas ── */}
-      <div style={{ display: "flex", gap: "var(--space-xl)", alignItems: "flex-start" }}>
-
+      <div
+        style={{
+          display: "flex",
+          gap: "var(--space-xl)",
+          alignItems: "flex-start",
+        }}
+      >
         {/* ─ Columna izquierda ─ */}
         <div
           style={{
@@ -287,18 +327,33 @@ export default function SesionNuevaPage() {
             minWidth: 0,
           }}
         >
-
           {/* ── SECCIÓN 1: Datos de la sesión ── */}
           <Card title="Datos de la sesión">
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
-
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "var(--space-md)",
+              }}
+            >
               {/* Entrevista base */}
               <div style={fieldStyle}>
                 <label style={labelStyle}>Entrevista base</label>
                 {loadingEntrevistas ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "var(--space-sm)",
+                    }}
+                  >
                     <Spinner size="sm" />
-                    <span style={{ fontSize: "var(--font-size-sm)", color: "var(--color-text-muted)" }}>
+                    <span
+                      style={{
+                        fontSize: "var(--font-size-sm)",
+                        color: "var(--color-text-muted)",
+                      }}
+                    >
                       Cargando entrevistas...
                     </span>
                   </div>
@@ -307,10 +362,14 @@ export default function SesionNuevaPage() {
                     style={selectStyle}
                     value={entrevistaBaseId ?? ""}
                     onChange={(e) =>
-                      handleSeleccionarEntrevista(e.target.value ? Number(e.target.value) : null)
+                      handleSeleccionarEntrevista(
+                        e.target.value ? Number(e.target.value) : null,
+                      )
                     }
                   >
-                    <option value="">Seleccionar entrevista base (opcional)</option>
+                    <option value="">
+                      Seleccionar entrevista base (opcional)
+                    </option>
                     {(entrevistas ?? []).map((e) => (
                       <option key={e.id} value={e.id}>
                         {e.titulo}
@@ -328,13 +387,18 @@ export default function SesionNuevaPage() {
                 error={errores.titulo}
                 onChange={(e) => {
                   setTitulo(e.target.value);
-                  if (errores.titulo) setErrores((p) => ({ ...p, titulo: undefined }));
+                  if (errores.titulo)
+                    setErrores((p) => ({ ...p, titulo: undefined }));
                 }}
               />
 
               {/* Fecha + Duración */}
               <div
-                style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-md)" }}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "var(--space-md)",
+                }}
               >
                 <div style={fieldStyle}>
                   <label style={labelStyle}>Fecha y hora de inicio *</label>
@@ -343,7 +407,8 @@ export default function SesionNuevaPage() {
                     value={fechaProgramada}
                     onChange={(e) => {
                       setFechaProgramada(e.target.value);
-                      if (errores.fecha) setErrores((p) => ({ ...p, fecha: undefined }));
+                      if (errores.fecha)
+                        setErrores((p) => ({ ...p, fecha: undefined }));
                     }}
                     style={{
                       ...selectStyle,
@@ -353,7 +418,12 @@ export default function SesionNuevaPage() {
                     }}
                   />
                   {errores.fecha && (
-                    <span style={{ fontSize: "var(--font-size-sm)", color: "var(--color-danger)" }}>
+                    <span
+                      style={{
+                        fontSize: "var(--font-size-sm)",
+                        color: "var(--color-danger)",
+                      }}
+                    >
                       {errores.fecha}
                     </span>
                   )}
@@ -379,9 +449,20 @@ export default function SesionNuevaPage() {
               <div style={fieldStyle}>
                 <label style={labelStyle}>Evaluador responsable *</label>
                 {loadingUsuarios ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "var(--space-sm)",
+                    }}
+                  >
                     <Spinner size="sm" />
-                    <span style={{ fontSize: "var(--font-size-sm)", color: "var(--color-text-muted)" }}>
+                    <span
+                      style={{
+                        fontSize: "var(--font-size-sm)",
+                        color: "var(--color-text-muted)",
+                      }}
+                    >
                       Cargando usuarios...
                     </span>
                   </div>
@@ -396,19 +477,27 @@ export default function SesionNuevaPage() {
                       }}
                       value={evaluadorId ?? ""}
                       onChange={(e) => {
-                        setEvaluadorId(e.target.value ? Number(e.target.value) : null);
-                        if (errores.evaluador) setErrores((p) => ({ ...p, evaluador: undefined }));
+                        setEvaluadorId(
+                          e.target.value ? Number(e.target.value) : null,
+                        );
+                        if (errores.evaluador)
+                          setErrores((p) => ({ ...p, evaluador: undefined }));
                       }}
                     >
                       <option value="">Seleccionar evaluador</option>
                       {(usuarios ?? []).map((u) => (
                         <option key={u.id} value={u.id}>
-                          {u.nombre} {u.apellido}
+                          {u.first_name} {u.last_name}
                         </option>
                       ))}
                     </select>
                     {errores.evaluador && (
-                      <span style={{ fontSize: "var(--font-size-sm)", color: "var(--color-danger)" }}>
+                      <span
+                        style={{
+                          fontSize: "var(--font-size-sm)",
+                          color: "var(--color-danger)",
+                        }}
+                      >
                         {errores.evaluador}
                       </span>
                     )}
@@ -444,8 +533,13 @@ export default function SesionNuevaPage() {
 
           {/* ── SECCIÓN 2: Candidatos invitados ── */}
           <Card title="Candidatos invitados">
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
-
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "var(--space-md)",
+              }}
+            >
               {/* Error global de candidatos */}
               {errores.candidatos && (
                 <div
@@ -476,7 +570,13 @@ export default function SesionNuevaPage() {
                   No hay candidatos agregados aún
                 </div>
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "var(--space-sm)",
+                  }}
+                >
                   {candidatos.map((candidato, i) => {
                     const iniciales = candidato.nombre
                       .split(" ")
@@ -484,7 +584,8 @@ export default function SesionNuevaPage() {
                       .join("")
                       .slice(0, 2)
                       .toUpperCase();
-                    const color = AVATAR_COLORS[i % AVATAR_COLORS.length] ?? "#1d4ed8";
+                    const color =
+                      AVATAR_COLORS[i % AVATAR_COLORS.length] ?? "#1d4ed8";
 
                     return (
                       <div
@@ -594,7 +695,9 @@ export default function SesionNuevaPage() {
                 />
                 <Button
                   variant="secondary"
-                  disabled={!nuevoNombre.trim() || !EMAIL_REGEX.test(nuevoEmail.trim())}
+                  disabled={
+                    !nuevoNombre.trim() || !EMAIL_REGEX.test(nuevoEmail.trim())
+                  }
                   onClick={handleAgregarCandidato}
                 >
                   + Agregar
@@ -618,7 +721,13 @@ export default function SesionNuevaPage() {
                 Selecciona una entrevista base para ver las pruebas
               </div>
             ) : loadingPruebas ? (
-              <div style={{ display: "flex", justifyContent: "center", padding: "var(--space-xl)" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "center",
+                  padding: "var(--space-xl)",
+                }}
+              >
                 <Spinner size="md" />
               </div>
             ) : (pruebasEntrevista ?? []).length === 0 ? (
@@ -634,7 +743,13 @@ export default function SesionNuevaPage() {
                 Esta entrevista no tiene pruebas asignadas
               </div>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "var(--space-sm)",
+                }}
+              >
                 {(pruebasEntrevista ?? []).map((pe, i) => {
                   const prueba = pruebaMap.get(pe.prueba);
 
@@ -696,7 +811,13 @@ export default function SesionNuevaPage() {
                       </div>
 
                       {/* Badges */}
-                      <div style={{ display: "flex", gap: "var(--space-xs)", flexShrink: 0 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: "var(--space-xs)",
+                          flexShrink: 0,
+                        }}
+                      >
                         {prueba && (
                           <Badge variant={PRUEBAS.TIPO_BADGE[prueba.tipo]}>
                             {PRUEBAS.TIPO_LABELS[prueba.tipo]}
@@ -733,7 +854,6 @@ export default function SesionNuevaPage() {
             gap: "var(--space-lg)",
           }}
         >
-
           {/* ── SECCIÓN 4: Link de supervisor ── */}
           {linkSupervisor ? (
             <div
@@ -747,7 +867,13 @@ export default function SesionNuevaPage() {
                 gap: "var(--space-sm)",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "var(--space-sm)",
+                }}
+              >
                 <span style={{ fontSize: "1.1rem" }}>✓</span>
                 <span
                   style={{
@@ -814,14 +940,28 @@ export default function SesionNuevaPage() {
           {/* ── SECCIÓN 4b: Links generados ── */}
           {enviado && invitadosLinks.length > 0 && (
             <Card title="Links generados">
-              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-xs)" }}>
-
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "var(--space-xs)",
+                }}
+              >
                 {/* Botón copiar todos */}
-                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 4 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "flex-end",
+                    marginBottom: 4,
+                  }}
+                >
                   <Button
                     variant="secondary"
                     onClick={handleCopiarTodosNueva}
-                    style={{ fontSize: "var(--font-size-xs)", padding: "4px 12px" }}
+                    style={{
+                      fontSize: "var(--font-size-xs)",
+                      padding: "4px 12px",
+                    }}
                   >
                     {copiadoTodosNueva ? "✓ Copiado" : "Copiar todos"}
                   </Button>
@@ -840,21 +980,50 @@ export default function SesionNuevaPage() {
                       borderBottom: "1px solid var(--color-border)",
                     }}
                   >
-                    <span style={{ fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-medium)", color: "var(--color-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <span
+                      style={{
+                        fontSize: "var(--font-size-sm)",
+                        fontWeight: "var(--font-weight-medium)",
+                        color: "var(--color-text)",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
                       {inv.nombre}
                     </span>
-                    <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 130 }}>
-                      {inv.link_invitacion
-                        ? (inv.link_invitacion.length > 30 ? `${inv.link_invitacion.slice(0, 30)}…` : inv.link_invitacion)
-                        : <em>No disponible</em>}
+                    <span
+                      style={{
+                        fontSize: "var(--font-size-xs)",
+                        color: "var(--color-text-muted)",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        maxWidth: 130,
+                      }}
+                    >
+                      {inv.link_invitacion ? (
+                        inv.link_invitacion.length > 30 ? (
+                          `${inv.link_invitacion.slice(0, 30)}…`
+                        ) : (
+                          inv.link_invitacion
+                        )
+                      ) : (
+                        <em>No disponible</em>
+                      )}
                     </span>
                     <button
                       disabled={!inv.link_invitacion}
-                      onClick={() => inv.link_invitacion && handleCopiarInvitadoNueva(inv.id, inv.link_invitacion)}
+                      onClick={() =>
+                        inv.link_invitacion &&
+                        handleCopiarInvitadoNueva(inv.id, inv.link_invitacion)
+                      }
                       style={{
                         padding: "3px 10px",
                         background: "transparent",
-                        color: inv.link_invitacion ? "var(--color-primary)" : "var(--color-text-muted)",
+                        color: inv.link_invitacion
+                          ? "var(--color-primary)"
+                          : "var(--color-text-muted)",
                         border: `1px solid ${inv.link_invitacion ? "var(--color-primary)" : "var(--color-border)"}`,
                         borderRadius: "var(--radius-sm)",
                         cursor: inv.link_invitacion ? "pointer" : "default",
@@ -874,8 +1043,13 @@ export default function SesionNuevaPage() {
           {/* ── SECCIÓN 5: Vista previa del email ── */}
           <div ref={emailPreviewRef}>
             <Card title="Vista previa del email">
-              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
-
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "var(--space-sm)",
+                }}
+              >
                 {/* Cabecera */}
                 <div
                   style={{
@@ -886,25 +1060,45 @@ export default function SesionNuevaPage() {
                     gap: "3px",
                   }}
                 >
-                  <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    <span style={{ fontWeight: "var(--font-weight-medium)" }}>Para: </span>
+                  <div
+                    style={{
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    <span style={{ fontWeight: "var(--font-weight-medium)" }}>
+                      Para:{" "}
+                    </span>
                     {candidatos.length > 0 ? (
                       candidatos.map((c) => c.email).join(", ")
                     ) : (
-                      <span style={{ fontStyle: "italic" }}>candidatos por agregar...</span>
+                      <span style={{ fontStyle: "italic" }}>
+                        candidatos por agregar...
+                      </span>
                     )}
                   </div>
                   <div>
-                    <span style={{ fontWeight: "var(--font-weight-medium)" }}>De: </span>
+                    <span style={{ fontWeight: "var(--font-weight-medium)" }}>
+                      De:{" "}
+                    </span>
                     evalsecure@empresa.com
                   </div>
                   <div>
-                    <span style={{ fontWeight: "var(--font-weight-medium)" }}>Asunto: </span>
+                    <span style={{ fontWeight: "var(--font-weight-medium)" }}>
+                      Asunto:{" "}
+                    </span>
                     Invitación a evaluación — EvalSecure
                   </div>
                 </div>
 
-                <hr style={{ border: "none", borderTop: "1px solid var(--color-border)", margin: 0 }} />
+                <hr
+                  style={{
+                    border: "none",
+                    borderTop: "1px solid var(--color-border)",
+                    margin: 0,
+                  }}
+                />
 
                 {/* Cuerpo */}
                 <div
@@ -919,7 +1113,8 @@ export default function SesionNuevaPage() {
                 >
                   <p style={{ margin: 0 }}>Hola,</p>
                   <p style={{ margin: 0 }}>
-                    Has sido invitado/a a participar en una evaluación a través de EvalSecure.
+                    Has sido invitado/a a participar en una evaluación a través
+                    de EvalSecure.
                   </p>
 
                   {/* Detalles de sesión */}
@@ -951,7 +1146,8 @@ export default function SesionNuevaPage() {
                     </div>
                     {evaluador && (
                       <div>
-                        <strong>Evaluador:</strong> {evaluador.nombre} {evaluador.apellido}
+                        <strong>Evaluador:</strong> {evaluador.first_name}{" "}
+                        {evaluador.last_name}
                       </div>
                     )}
                   </div>
@@ -978,7 +1174,8 @@ export default function SesionNuevaPage() {
                       fontStyle: "italic",
                     }}
                   >
-                    Esta sesión está sujeta a monitoreo remoto por parte de EvalSecure.
+                    Esta sesión está sujeta a monitoreo remoto por parte de
+                    EvalSecure.
                   </p>
                 </div>
               </div>
@@ -987,7 +1184,13 @@ export default function SesionNuevaPage() {
 
           {/* ── SECCIÓN 6: Acciones ── */}
           <Card>
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "var(--space-sm)",
+              }}
+            >
               {enviado && (
                 <div
                   style={{
@@ -1005,12 +1208,18 @@ export default function SesionNuevaPage() {
               )}
 
               <div
-                style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-sm)" }}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "var(--space-sm)",
+                }}
               >
                 <Button
                   variant="secondary"
                   onClick={() =>
-                    emailPreviewRef.current?.scrollIntoView({ behavior: "smooth" })
+                    emailPreviewRef.current?.scrollIntoView({
+                      behavior: "smooth",
+                    })
                   }
                 >
                   Ver email
@@ -1039,7 +1248,9 @@ export default function SesionNuevaPage() {
           onClick={handleSubmit}
           style={{ width: "100%" }}
         >
-          {enviado ? "✓ Sesión creada exitosamente" : "Crear sesión y enviar links"}
+          {enviado
+            ? "✓ Sesión creada exitosamente"
+            : "Crear sesión y enviar links"}
         </Button>
       </div>
     </MainLayout>

@@ -70,7 +70,7 @@ export default function UsuariosTable({ onEdit }: UsuariosTableProps) {
   }
 
   const handleDelete = (usuario: Usuario) => {
-    if (window.confirm(`${USUARIOS.CONFIRM_DELETE}\n${usuario.nombre} ${usuario.apellido}`)) {
+    if (window.confirm(`${USUARIOS.CONFIRM_DELETE}\n${usuario.first_name} ${usuario.last_name}`)) {
       deleteUsuario.mutate(usuario.id);
     }
   };
@@ -93,7 +93,7 @@ export default function UsuariosTable({ onEdit }: UsuariosTableProps) {
           {usuarios.map((usuario) => (
             <tr key={usuario.id}>
               <td style={tdStyle}>
-                {usuario.nombre} {usuario.apellido}
+                {usuario.first_name} {usuario.last_name}
               </td>
               <td style={{ ...tdStyle, color: "var(--color-text-muted)" }}>{usuario.email}</td>
               <td style={tdStyle}>

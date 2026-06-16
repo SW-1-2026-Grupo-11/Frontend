@@ -11,8 +11,9 @@ type UsuarioModalProps = {
 };
 
 type FormState = {
-  nombre: string;
-  apellido: string;
+  username: string;
+  first_name: string;
+  last_name: string;
   email: string;
   telefono: string;
   password: string;
@@ -26,8 +27,9 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function validateForm(state: FormState, isEdit: boolean): FormErrors {
   const errors: FormErrors = {};
-  if (!state.nombre.trim()) errors.nombre = USUARIOS.VALIDATION_REQUIRED;
-  if (!state.apellido.trim()) errors.apellido = USUARIOS.VALIDATION_REQUIRED;
+  if (!state.username.trim()) errors.username = USUARIOS.VALIDATION_REQUIRED;
+  if (!state.first_name.trim()) errors.first_name = USUARIOS.VALIDATION_REQUIRED;
+  if (!state.last_name.trim()) errors.last_name = USUARIOS.VALIDATION_REQUIRED;
   if (!state.email.trim()) {
     errors.email = USUARIOS.VALIDATION_REQUIRED;
   } else if (!EMAIL_REGEX.test(state.email)) {
@@ -57,12 +59,13 @@ export default function UsuarioModal({ onClose, usuario }: UsuarioModalProps) {
   const updateUsuario = useUpdateUsuario();
 
   const [form, setForm] = useState<FormState>({
-    nombre: usuario?.nombre ?? "",
-    apellido: usuario?.apellido ?? "",
+    username: usuario?.username ?? "",
+    first_name: usuario?.first_name ?? "",
+    last_name: usuario?.last_name ?? "",
     email: usuario?.email ?? "",
     telefono: usuario?.telefono ?? "",
     password: "",
-    rol: usuario?.rol ?? "evaluador",
+    rol: usuario?.rol ?? "supervisor",
     estado: usuario?.estado ?? "activo",
   });
   const [formErrors, setFormErrors] = useState<FormErrors>({});
@@ -84,8 +87,8 @@ export default function UsuarioModal({ onClose, usuario }: UsuarioModalProps) {
 
     if (isEdit && usuario) {
       const dto: UpdateUsuarioDto = {
-        nombre: form.nombre,
-        apellido: form.apellido,
+        first_name: form.first_name,
+        last_name: form.last_name,
         email: form.email,
         telefono: form.telefono,
         rol: form.rol,
@@ -93,8 +96,15 @@ export default function UsuarioModal({ onClose, usuario }: UsuarioModalProps) {
       };
       updateUsuario.mutate({ id: usuario.id, dto }, { onSuccess: onClose });
     } else {
-      const { estado: _estado, ...createFields } = form;
-      const dto: CreateUsuarioDto = createFields;
+      const dto: CreateUsuarioDto = {
+        username: form.username,
+        first_name: form.first_name,
+        last_name: form.last_name,
+        email: form.email,
+        telefono: form.telefono,
+        password: form.password,
+        rol: form.rol,
+      };
       createUsuario.mutate(dto, { onSuccess: onClose });
     }
   };
@@ -169,22 +179,34 @@ export default function UsuarioModal({ onClose, usuario }: UsuarioModalProps) {
           onSubmit={handleSubmit}
           style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}
         >
+          {!isEdit && (
+            <Input
+              label="Usuario"
+              name="username"
+              value={form.username}
+              error={formErrors.username}
+              variant={formErrors.username ? "error" : "default"}
+              autoComplete="username"
+              onChange={(e) => handleChange("username", e.target.value)}
+            />
+          )}
+
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-md)" }}>
             <Input
               label={USUARIOS.LABEL_NOMBRE}
-              name="nombre"
-              value={form.nombre}
-              error={formErrors.nombre}
-              variant={formErrors.nombre ? "error" : "default"}
-              onChange={(e) => handleChange("nombre", e.target.value)}
+              name="first_name"
+              value={form.first_name}
+              error={formErrors.first_name}
+              variant={formErrors.first_name ? "error" : "default"}
+              onChange={(e) => handleChange("first_name", e.target.value)}
             />
             <Input
               label={USUARIOS.LABEL_APELLIDO}
-              name="apellido"
-              value={form.apellido}
-              error={formErrors.apellido}
-              variant={formErrors.apellido ? "error" : "default"}
-              onChange={(e) => handleChange("apellido", e.target.value)}
+              name="last_name"
+              value={form.last_name}
+              error={formErrors.last_name}
+              variant={formErrors.last_name ? "error" : "default"}
+              onChange={(e) => handleChange("last_name", e.target.value)}
             />
           </div>
 
@@ -300,7 +322,6 @@ export default function UsuarioModal({ onClose, usuario }: UsuarioModalProps) {
         </form>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }
-
