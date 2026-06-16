@@ -123,18 +123,14 @@ export const PRUEBAS = {
 } as const;
 
 export const USUARIOS = {
-  ROLES: ["admin", "reclutador", "entrevistador", "evaluador"] as const,
+  ROLES: ["supervisor", "invitado"] as const,
   ROL_LABELS: {
-    admin: "Administrador",
-    reclutador: "Reclutador",
-    entrevistador: "Entrevistador",
-    evaluador: "Evaluador",
+    supervisor: "Supervisor",
+    invitado: "Invitado",
   } as const,
   ROL_BADGE: {
-    admin: "danger",
-    reclutador: "info",
-    entrevistador: "warning",
-    evaluador: "success",
+    supervisor: "info",
+    invitado: "warning",
   } as const,
 
   ESTADOS: ["activo", "inactivo"] as const,
