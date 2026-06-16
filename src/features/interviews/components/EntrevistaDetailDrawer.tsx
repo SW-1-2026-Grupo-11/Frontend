@@ -385,7 +385,7 @@ export default function EntrevistaDetailDrawer({
             </div>
           ) : invitados.length === 0 ? (
             <p style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)", textAlign: "center", padding: "var(--space-lg)", backgroundColor: "var(--color-background)", borderRadius: "var(--radius-md)", border: "1px dashed var(--color-border)" }}>
-              No hay invitados para esta entrevista
+              No hay invitados para esta convocatoria
             </p>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-xs)", backgroundColor: "var(--color-background)", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", overflow: "hidden" }}>

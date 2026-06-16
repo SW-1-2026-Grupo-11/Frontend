@@ -184,7 +184,7 @@ export const DASHBOARD = {
   ACCESOS_TITLE: "Accesos rápidos",
   ACCESO_USUARIOS: "Gestionar usuarios",
   ACCESO_PRUEBAS: "Gestionar pruebas",
-  ACCESO_ENTREVISTAS: "Gestionar entrevistas",
+  ACCESO_ENTREVISTAS: "Gestionar convocatorias",
   ACTIVIDAD_TITLE: "Actividad reciente",
   ACTIVIDAD_ERROR: "Error al cargar la actividad reciente",
   ACTIVIDAD_EMPTY: "No hay actividad registrada",
@@ -225,23 +225,23 @@ export const ENTREVISTAS = {
   COL_ESTADO: "Estado",
   COL_FECHA: "Fecha programada",
   COL_ACCIONES: "Acciones",
-  EMPTY: "No hay entrevistas registradas",
-  ERROR: "Error al cargar las entrevistas",
+  EMPTY: "No hay convocatorias registradas",
+  ERROR: "Error al cargar las convocatorias",
   // Acciones
-  BTN_NUEVA: "Nueva entrevista",
+  BTN_NUEVA: "Nueva convocatoria",
   BTN_VER: "Ver",
   BTN_EDITAR: "Editar",
   BTN_ELIMINAR: "Eliminar",
-  BTN_CREAR: "Crear entrevista",
+  BTN_CREAR: "Crear convocatoria",
   BTN_GUARDAR: "Guardar cambios",
   BTN_CANCELAR: "Cancelar",
   BTN_CERRAR: "Cerrar",
   BTN_ASIGNAR_PRUEBA: "Asignar prueba",
   BTN_REMOVER: "Remover",
   // Modales
-  MODAL_CREAR_TITLE: "Nueva entrevista",
-  MODAL_EDITAR_TITLE: "Editar entrevista",
-  MODAL_DETALLE_TITLE: "Detalle de entrevista",
+  MODAL_CREAR_TITLE: "Nueva convocatoria",
+  MODAL_EDITAR_TITLE: "Editar convocatoria",
+  MODAL_DETALLE_TITLE: "Detalle de convocatoria",
   MODAL_ASIGNAR_TITLE: "Asignar prueba",
   // Formulario
   LABEL_TITULO: "Título",
@@ -258,8 +258,8 @@ export const ENTREVISTAS = {
   // Filtro
   FILTER_TODAS: "Todos los estados",
   // Confirmación
-  CONFIRM_DELETE: "¿Estás seguro de que deseas eliminar esta entrevista?",
-  CONFIRM_REMOVER_PRUEBA: "¿Remover esta prueba de la entrevista?",
+  CONFIRM_DELETE: "¿Estás seguro de que deseas eliminar esta convocatoria?",
+  CONFIRM_REMOVER_PRUEBA: "¿Remover esta prueba de la convocatoria?",
   // Validación
   VALIDATION_REQUIRED: "Este campo es requerido",
 } as const;
@@ -286,12 +286,12 @@ export const UI = {
   NAV_SUPERVISION: "Supervisión",
   NAV_USUARIOS: "Usuarios",
   NAV_PRUEBAS: "Pruebas",
-  NAV_ENTREVISTAS: "Entrevistas",
+  NAV_ENTREVISTAS: "Convocatorias",
   // Páginas
   DASHBOARD_TITLE: "Dashboard",
   USUARIOS_TITLE: "Gestionar Usuarios",
   PRUEBAS_TITLE: "Gestionar Pruebas",
-  ENTREVISTAS_TITLE: "Gestionar Entrevistas",
+  ENTREVISTAS_TITLE: "Gestionar Convocatorias",
   SESIONES_TITLE: "Gestionar Sesiones",
   JOIN_TITLE: "Unirse a sesión",
   // Sidebar
