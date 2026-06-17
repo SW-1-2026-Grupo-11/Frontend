@@ -7,8 +7,15 @@ export type {
   ActualizarEstadoDto,
   ActualizarObservacionesDto,
   AgregarInvitadoDto,
+  FormatoPregunta,
+  OpcionCandidato,
+  PreguntaCandidato,
+  SeccionCandidato,
+  PruebaCandidato,
+  ResponderDto,
 } from "./types";
 export { sesionesService } from "./services/sesionesService";
+export { default as RendirPrueba } from "./components/RendirPrueba";
 export {
   useGetSesiones,
   useCrearSesion,
@@ -20,4 +27,7 @@ export {
   useFinalizarSesion,
   useMarcarAceptado,
   useIngresarSesion,
+  useGetPruebaCandidato,
+  useResponder,
+  useFinalizarCandidato,
 } from "./hooks/useSesiones";

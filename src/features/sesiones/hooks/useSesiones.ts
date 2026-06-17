@@ -7,6 +7,8 @@ import type {
   AgregarInvitadoDto,
   CrearSesionDto,
   Sesion,
+  PruebaCandidato,
+  ResponderDto,
 } from "../types";
 
 const BASE_KEY = ["sesiones"] as const;
@@ -118,6 +120,62 @@ export function useIngresarSesion() {
         body: JSON.stringify({ token }),
       });
       if (!res.ok) throw new Error("Error al ingresar a la sesión");
+      return res.json() as Promise<Sesion>;
+    },
+  });
+}
+
+// ─── Rendir prueba (Capa 3c) — todo con el JWT del invitado ────────────────────
+
+// Contenido de la prueba para que el candidato la rinda (sin respuestas correctas)
+export function useGetPruebaCandidato(sesionId: number | undefined, token: string | null) {
+  return useQuery({
+    queryKey: [...BASE_KEY, "prueba-candidato", sesionId] as const,
+    queryFn: async (): Promise<PruebaCandidato> => {
+      const res = await fetch(`${env.API_URL}/sesiones/${sesionId}/prueba/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json() as Promise<PruebaCandidato>;
+    },
+    enabled: !!sesionId && !!token,
+    retry: false,
+  });
+}
+
+// Enviar (o actualizar) la respuesta de una pregunta
+export function useResponder() {
+  return useMutation({
+    mutationFn: async ({
+      sesionId,
+      token,
+      dto,
+    }: {
+      sesionId: number;
+      token: string;
+      dto: ResponderDto;
+    }) => {
+      const res = await fetch(`${env.API_URL}/sesiones/${sesionId}/responder/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, ...dto }),
+      });
+      if (!res.ok) throw new Error("Error al enviar la respuesta");
+      return res.json() as Promise<unknown>;
+    },
+  });
+}
+
+// El candidato termina la prueba → sesión finalizada
+export function useFinalizarCandidato() {
+  return useMutation({
+    mutationFn: async ({ sesionId, token }: { sesionId: number; token: string }) => {
+      const res = await fetch(`${env.API_URL}/sesiones/${sesionId}/finalizar-candidato/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+      if (!res.ok) throw new Error("Error al finalizar la prueba");
       return res.json() as Promise<Sesion>;
     },
   });

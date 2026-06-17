@@ -6,6 +6,7 @@ import {
   useActualizarObservaciones,
   useMarcarAceptado,
   useIngresarSesion,
+  RendirPrueba,
 } from "@/features/sesiones";
 import type { Sesion, SesionDetalle, InvitadoSesion } from "@/features/sesiones";
 import env from "@/config/env";
@@ -408,6 +409,22 @@ export default function JoinPage() {
   // JWTAuthentication). El registro de Sesión es para los datos, no para el room.
   const roomName = `entrevista-${decoded.entrevista_id}`;
 
+  const jitsiEl = (
+    <JitsiRoom
+      ref={jitsiRef}
+      roomName={roomName}
+      displayName={decoded.nombre}
+      email={decoded.email}
+      isModerator={decoded.moderator}
+      onConferenceJoined={handleConferenceJoined}
+      onParticipantJoined={handleParticipantJoined}
+      onParticipantLeft={handleParticipantLeft}
+      onVideoMuteChanged={handleVideoMuteChanged}
+      onScreenShareChanged={handleScreenShareChanged}
+      onReadyToClose={handleReadyToClose}
+    />
+  );
+
   return (
     <div
       style={{
@@ -532,22 +549,41 @@ export default function JoinPage() {
 
       {/* ── Contenido principal: Jitsi + panel lateral ── */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-        {/* Jitsi iframe */}
-        <div style={{ flex: 1, overflow: "hidden" }}>
-          <JitsiRoom
-            ref={jitsiRef}
-            roomName={roomName}
-            displayName={decoded.nombre}
-            email={decoded.email}
-            isModerator={decoded.moderator}
-            onConferenceJoined={handleConferenceJoined}
-            onParticipantJoined={handleParticipantJoined}
-            onParticipantLeft={handleParticipantLeft}
-            onVideoMuteChanged={handleVideoMuteChanged}
-            onScreenShareChanged={handleScreenShareChanged}
-            onReadyToClose={handleReadyToClose}
-          />
-        </div>
+        {/* Candidato: rendir la prueba + cámara chica · Supervisor: video grande */}
+        {!decoded.moderator ? (
+          <>
+            <div style={{ flex: 1, overflow: "hidden", minWidth: 0 }}>
+              {sesion ? (
+                <RendirPrueba sesionId={sesion.id} token={token} onFinalizar={handleSalir} />
+              ) : (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    height: "100%",
+                    color: "rgba(255,255,255,0.5)",
+                    fontSize: "var(--font-size-sm)",
+                  }}
+                >
+                  Preparando tu prueba…
+                </div>
+              )}
+            </div>
+            <div
+              style={{
+                width: 300,
+                flexShrink: 0,
+                borderLeft: "1px solid rgba(255,255,255,0.08)",
+                background: "#0a0a0f",
+              }}
+            >
+              {jitsiEl}
+            </div>
+          </>
+        ) : (
+          <div style={{ flex: 1, overflow: "hidden" }}>{jitsiEl}</div>
+        )}
 
         {/* Panel lateral — solo supervisores */}
         {decoded.moderator && (

@@ -276,7 +276,7 @@ export default function SesionNuevaPage() {
             marginBottom: "var(--space-xs)",
           }}
         >
-          Programar sesión de evaluación
+          Nueva convocatoria
         </h1>
         <p
           style={{
@@ -1069,8 +1069,8 @@ export default function SesionNuevaPage() {
           style={{ width: "100%" }}
         >
           {enviado
-            ? "✓ Sesión creada exitosamente"
-            : "Crear sesión y enviar links"}
+            ? "✓ Convocatoria creada exitosamente"
+            : "Crear convocatoria y enviar links"}
         </Button>
       </div>
     </MainLayout>

@@ -54,3 +54,53 @@ export type AgregarInvitadoDto = {
   nombre: string;
   email: string;
 };
+
+// ─── Rendir prueba (Capa 3c) — vista del candidato, sin respuestas correctas ───
+
+export type FormatoPregunta =
+  | "opcion_multiple"
+  | "verdadero_falso"
+  | "abierta"
+  | "codigo";
+
+export type OpcionCandidato = {
+  id: number;
+  texto: string;
+  orden: number;
+};
+
+export type PreguntaCandidato = {
+  id: number;
+  enunciado: string;
+  formato: FormatoPregunta;
+  puntaje: number;
+  orden: number;
+  lenguaje: string | null;
+  opciones: OpcionCandidato[];
+};
+
+export type SeccionCandidato = {
+  id: number;
+  titulo: string;
+  tipo: string;
+  descripcion: string | null;
+  orden: number;
+  peso_porcentual: number;
+  preguntas: PreguntaCandidato[];
+};
+
+export type PruebaCandidato = {
+  id: number;
+  titulo: string;
+  descripcion: string | null;
+  duracion_minutos: number;
+  secciones: SeccionCandidato[];
+};
+
+export type ResponderDto = {
+  pregunta_id: number;
+  contenido_texto?: string;
+  contenido_url?: string;
+  casos_pasados?: number;
+  tiempo_segundos?: number;
+};
