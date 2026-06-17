@@ -123,13 +123,36 @@ export function useMarcarAceptado() {
 export function useIngresarSesion() {
   return useMutation({
     mutationFn: async ({ token }: { token: string }): Promise<Sesion> => {
-      const res = await fetch(`${env.API_URL}/sesiones/ingresar/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token }),
-      });
-      if (!res.ok) throw new Error("Error al ingresar a la sesión");
-      return res.json() as Promise<Sesion>;
+      const ctrl = new AbortController();
+      const timeout = setTimeout(() => ctrl.abort(), 12000);
+      try {
+        const res = await fetch(`${env.API_URL}/sesiones/ingresar/`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token }),
+          signal: ctrl.signal,
+        });
+        if (!res.ok) {
+          let detail = `Error ${res.status}`;
+          try {
+            const e = (await res.json()) as { detail?: string };
+            if (e?.detail) detail = e.detail;
+          } catch {
+            /* respuesta sin cuerpo JSON */
+          }
+          throw new Error(detail);
+        }
+        return (await res.json()) as Sesion;
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          throw new Error(
+            "El servidor no respondió (timeout 12s). Revisa que el backend esté arriba o avisa al evaluador.",
+          );
+        }
+        throw err;
+      } finally {
+        clearTimeout(timeout);
+      }
     },
   });
 }
@@ -141,11 +164,32 @@ export function useGetPruebaCandidato(sesionId: number | undefined, token: strin
   return useQuery({
     queryKey: [...BASE_KEY, "prueba-candidato", sesionId] as const,
     queryFn: async (): Promise<PruebaCandidato> => {
-      const res = await fetch(`${env.API_URL}/sesiones/${sesionId}/prueba/`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return res.json() as Promise<PruebaCandidato>;
+      const ctrl = new AbortController();
+      const timeout = setTimeout(() => ctrl.abort(), 12000);
+      try {
+        const res = await fetch(`${env.API_URL}/sesiones/${sesionId}/prueba/`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: ctrl.signal,
+        });
+        if (!res.ok) {
+          let detail = `HTTP ${res.status}`;
+          try {
+            const e = (await res.json()) as { detail?: string };
+            if (e?.detail) detail = e.detail;
+          } catch {
+            /* sin cuerpo JSON */
+          }
+          throw new Error(detail);
+        }
+        return (await res.json()) as PruebaCandidato;
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          throw new Error("Timeout (12s) al cargar la prueba.");
+        }
+        throw err;
+      } finally {
+        clearTimeout(timeout);
+      }
     },
     enabled: !!sesionId && !!token,
     retry: false,

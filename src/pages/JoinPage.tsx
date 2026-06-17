@@ -2,13 +2,13 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearch } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useJwtDecode } from "@/shared/hooks/useJwtDecode";
-import {
-  useActualizarObservaciones,
-  useMarcarAceptado,
-  useIngresarSesion,
-  RendirPrueba,
+import { useActualizarObservaciones, RendirPrueba } from "@/features/sesiones";
+import type {
+  Sesion,
+  SesionDetalle,
+  InvitadoSesion,
+  PruebaCandidato,
 } from "@/features/sesiones";
-import type { Sesion, SesionDetalle, InvitadoSesion } from "@/features/sesiones";
 import env from "@/config/env";
 import { useProctoring, proctoringService } from "@/features/proctoring";
 import { JitsiRoom } from "@/features/supervision";
@@ -75,7 +75,6 @@ export default function JoinPage() {
 
   // ── Refs ──
   const jitsiRef = useRef<JitsiRoomHandle>(null);
-  const marcarFiredRef = useRef(false);
 
   // ── Fetch público con el JWT del token de invitado/supervisor ──
   const fetchWithInvitadoToken = useCallback(
@@ -107,19 +106,61 @@ export default function JoinPage() {
     retry: false,
   });
 
-  // Candidato: la sesión NACE al entrar (Capa 3) → POST /sesiones/ingresar/
-  const ingresarMutation = useIngresarSesion();
-  const [ingresoSesion, setIngresoSesion] = useState<Sesion | null>(null);
-  const ingresoFiredRef = useRef(false);
-  useEffect(() => {
-    if (ingresoFiredRef.current || !decoded || decoded.moderator || !token) return;
-    ingresoFiredRef.current = true;
-    ingresarMutation.mutate({ token }, { onSuccess: (s) => setIngresoSesion(s) });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [decoded, token]);
+  // Candidato: UNA sola llamada crea la sesión Y trae la prueba (Capa 3c).
+  // POST /sesiones/rendir/ {token} -> { sesion, prueba }. Fetch plano + estado
+  // local: sin React Query, sin 2 pasos acoplados, nada que se desincronice.
+  const [rendir, setRendir] = useState<{ sesion: Sesion; prueba: PruebaCandidato | null } | null>(
+    null,
+  );
+  const [rendirError, setRendirError] = useState<string | null>(null);
+  const rendirFiredRef = useRef(false);
 
-  // Sesión efectiva: el candidato usa la que nació al entrar; el supervisor, la consultada.
-  const sesion = decoded?.moderator ? sesionSupervisor : ingresoSesion ?? undefined;
+  const cargarRendir = useCallback(() => {
+    if (!token) return;
+    setRendirError(null);
+    setRendir(null);
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), 12000);
+    fetch(`${env.API_URL}/sesiones/rendir/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+      signal: ctrl.signal,
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          let detail = `Error ${res.status}`;
+          try {
+            const e = (await res.json()) as { detail?: string };
+            if (e?.detail) detail = e.detail;
+          } catch {
+            /* sin cuerpo JSON */
+          }
+          throw new Error(detail);
+        }
+        return (await res.json()) as { sesion: Sesion; prueba: PruebaCandidato | null };
+      })
+      .then((data) => setRendir(data))
+      .catch((err: unknown) => {
+        const msg =
+          err instanceof DOMException && err.name === "AbortError"
+            ? "El servidor no respondió (timeout 12s). Avisa al evaluador."
+            : err instanceof Error
+              ? err.message
+              : "No se pudo cargar tu prueba.";
+        setRendirError(msg);
+      })
+      .finally(() => clearTimeout(timeout));
+  }, [token]);
+
+  useEffect(() => {
+    if (rendirFiredRef.current || !decoded || decoded.moderator || !token) return;
+    rendirFiredRef.current = true;
+    cargarRendir();
+  }, [decoded, token, cargarRendir]);
+
+  // Sesión efectiva: candidato = la de /rendir/; supervisor = la consultada.
+  const sesion = decoded?.moderator ? sesionSupervisor : rendir?.sesion ?? undefined;
 
   const { data: sesionDetalle } = useQuery<SesionDetalle>({
     queryKey: ["sesion-detalle-publica", sesion?.id, token],
@@ -136,7 +177,6 @@ export default function JoinPage() {
   });
 
   // ── Mutaciones ──
-  const marcarAceptadoMutation = useMarcarAceptado();
   const actualizarObsMutation = useActualizarObservaciones();
 
   // ── Proctoring (solo candidatos, se activa cuando entran a la sala) ──
@@ -147,13 +187,7 @@ export default function JoinPage() {
     enabled: jitsiJoined && !decoded?.moderator,
   });
 
-  // ── Marcar invitado como aceptado (una sola vez al cargar) ──
-  useEffect(() => {
-    if (marcarFiredRef.current || !decoded || decoded.moderator || decoded.invitado_id === null) return;
-    marcarFiredRef.current = true;
-    marcarAceptadoMutation.mutate({ invitadoId: decoded.invitado_id, token });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [decoded]);
+  // (El invitado se marca "aceptado" automáticamente dentro del endpoint `ingresar`.)
 
   // ── Timer de sesión ──
   useEffect(() => {
@@ -200,6 +234,10 @@ export default function JoinPage() {
     setFase("ended");
     setJitsiJoined(false);
     setTimerSeconds(0);
+  };
+
+  const handleReintentarIngreso = () => {
+    cargarRendir();
   };
 
   const handleConferenceJoined = useCallback(() => {
@@ -553,8 +591,54 @@ export default function JoinPage() {
         {!decoded.moderator ? (
           <>
             <div style={{ flex: 1, overflow: "hidden", minWidth: 0 }}>
-              {sesion ? (
-                <RendirPrueba sesionId={sesion.id} token={token} onFinalizar={handleSalir} />
+              {rendir ? (
+                <RendirPrueba
+                  prueba={rendir.prueba}
+                  sesionId={rendir.sesion.id}
+                  token={token}
+                  onFinalizar={handleSalir}
+                />
+              ) : rendirError ? (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "var(--space-sm)",
+                    height: "100%",
+                    padding: 24,
+                    textAlign: "center",
+                    color: "rgba(255,255,255,0.7)",
+                  }}
+                >
+                  <span style={{ fontSize: "2rem" }}>⚠️</span>
+                  <p style={{ margin: 0, fontSize: "var(--font-size-base)", fontWeight: "var(--font-weight-bold)" }}>
+                    No se pudo iniciar tu evaluación
+                  </p>
+                  <p style={{ margin: 0, fontSize: "var(--font-size-sm)", color: "rgba(255,255,255,0.5)" }}>
+                    {rendirError ?? "El enlace puede haber expirado o ser inválido."}
+                  </p>
+                  <p style={{ margin: 0, fontSize: "var(--font-size-xs)", color: "rgba(255,255,255,0.35)" }}>
+                    Recarga la página o contacta al evaluador.
+                  </p>
+                  <button
+                    onClick={handleReintentarIngreso}
+                    style={{
+                      marginTop: 8,
+                      padding: "8px 18px",
+                      background: "var(--color-primary)",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: "var(--radius-md)",
+                      cursor: "pointer",
+                      fontSize: "var(--font-size-sm)",
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    Reintentar
+                  </button>
+                </div>
               ) : (
                 <div
                   style={{

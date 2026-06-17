@@ -1,10 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import {
-  useGetPruebaCandidato,
-  useResponder,
-  useFinalizarCandidato,
-} from "../hooks/useSesiones";
-import type { PreguntaCandidato } from "../types";
+import { useResponder, useFinalizarCandidato } from "../hooks/useSesiones";
+import type { PreguntaCandidato, PruebaCandidato } from "../types";
 
 type FlatPregunta = PreguntaCandidato & {
   seccionTitulo: string;
@@ -12,6 +8,7 @@ type FlatPregunta = PreguntaCandidato & {
 };
 
 type Props = {
+  prueba: PruebaCandidato | null;
   sesionId: number;
   token: string;
   onFinalizar: () => void;
@@ -24,8 +21,7 @@ const FORMATO_LABEL: Record<string, string> = {
   codigo: "Código",
 };
 
-export default function RendirPrueba({ sesionId, token, onFinalizar }: Props) {
-  const { data: prueba, isLoading, isError } = useGetPruebaCandidato(sesionId, token);
+export default function RendirPrueba({ prueba, sesionId, token, onFinalizar }: Props) {
   const responder = useResponder();
   const finalizar = useFinalizarCandidato();
 
@@ -98,8 +94,6 @@ export default function RendirPrueba({ sesionId, token, onFinalizar }: Props) {
     onFinalizar();
   }
 
-  if (isLoading) return <Centro>Cargando prueba…</Centro>;
-  if (isError) return <Centro>No se pudo cargar la prueba. Avisa al evaluador.</Centro>;
   if (!prueba || total === 0 || !preg)
     return <Centro>Esta convocatoria todavía no tiene preguntas asignadas.</Centro>;
 
