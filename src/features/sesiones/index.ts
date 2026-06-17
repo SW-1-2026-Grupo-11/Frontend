@@ -13,9 +13,13 @@ export type {
   SeccionCandidato,
   PruebaCandidato,
   ResponderDto,
+  EstadoCorreccion,
+  RespuestaCalificacion,
+  CalificacionResp,
 } from "./types";
 export { sesionesService } from "./services/sesionesService";
 export { default as RendirPrueba } from "./components/RendirPrueba";
+export { default as CalificacionSesion } from "./components/CalificacionSesion";
 export {
   useGetSesiones,
   useCrearSesion,
@@ -30,4 +34,7 @@ export {
   useGetPruebaCandidato,
   useResponder,
   useFinalizarCandidato,
+  useGetRespuestas,
+  useCalificarAuto,
+  usePuntuar,
 } from "./hooks/useSesiones";

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { MainLayout } from "@/shared/components/layout";
 import { useCurrentUser, useLogout } from "@/features/auth";
-import { useGetSesionDetalle, useActualizarObservaciones } from "@/features/sesiones";
+import { useGetSesionDetalle, useActualizarObservaciones, CalificacionSesion } from "@/features/sesiones";
 import type { InvitadoSesion } from "@/features/sesiones";
 import { useAlertas } from "@/features/alertas";
 import type { Alerta } from "@/features/alertas";
@@ -492,6 +492,16 @@ export default function SesionDetallePage() {
         </div>
 
         {/* ── SECCIÓN 4: Participantes ───────────────────────────────────────── */}
+        {/* ── Desempeño en la prueba (Capa 4) ── */}
+        <div style={card}>
+          <h2 style={cardTitle}>Desempeño en la prueba</h2>
+          <CalificacionSesion
+            sesionId={sesionId}
+            notaInicial={sesionDetalle.nota_final}
+            estadoInicial={sesionDetalle.estado_correccion}
+          />
+        </div>
+
         <div style={card}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
             <h2 style={{ ...cardTitle, marginBottom: 0 }}>Participantes y su evaluación</h2>

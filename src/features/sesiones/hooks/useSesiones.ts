@@ -180,3 +180,39 @@ export function useFinalizarCandidato() {
     },
   });
 }
+
+// ─── Calificación (Capa 4b) — lado evaluador (api autenticado) ──────────────────
+
+export function useGetRespuestas(sesionId: number) {
+  return useQuery({
+    queryKey: [...BASE_KEY, sesionId, "respuestas"] as const,
+    queryFn: () => sesionesService.getRespuestas(sesionId),
+    enabled: sesionId > 0,
+  });
+}
+
+export function useCalificarAuto() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (sesionId: number) => sesionesService.calificarAuto(sesionId),
+    onSuccess: (_data, sesionId) =>
+      queryClient.invalidateQueries({ queryKey: [...BASE_KEY, sesionId] }),
+  });
+}
+
+export function usePuntuar() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      sesionId,
+      respuestaId,
+      puntaje,
+    }: {
+      sesionId: number;
+      respuestaId: number;
+      puntaje: number;
+    }) => sesionesService.puntuar(sesionId, respuestaId, puntaje),
+    onSuccess: (_data, { sesionId }) =>
+      queryClient.invalidateQueries({ queryKey: [...BASE_KEY, sesionId] }),
+  });
+}

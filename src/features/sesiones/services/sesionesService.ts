@@ -7,6 +7,8 @@ import type {
   ActualizarObservacionesDto,
   AgregarInvitadoDto,
   InvitadoSesion,
+  RespuestaCalificacion,
+  CalificacionResp,
 } from "../types";
 
 export const sesionesService = {
@@ -45,4 +47,19 @@ export const sesionesService = {
 
   finalizarSesion: (sesionId: number): Promise<Sesion> =>
     api.patch<Sesion>(`/sesiones/${sesionId}/finalizar/`).then((r) => r.data),
+
+  // ── Calificación (Capa 4) — usa el api autenticado del evaluador ──
+  getRespuestas: (sesionId: number): Promise<RespuestaCalificacion[]> =>
+    api.get<RespuestaCalificacion[]>(`/sesiones/${sesionId}/respuestas/`).then((r) => r.data),
+
+  calificarAuto: (sesionId: number): Promise<CalificacionResp> =>
+    api.post<CalificacionResp>(`/sesiones/${sesionId}/calificar-auto/`).then((r) => r.data),
+
+  puntuar: (sesionId: number, respuestaId: number, puntaje: number): Promise<CalificacionResp> =>
+    api
+      .post<CalificacionResp>(`/sesiones/${sesionId}/puntuar/`, {
+        respuesta_id: respuestaId,
+        puntaje_humano: puntaje,
+      })
+      .then((r) => r.data),
 };

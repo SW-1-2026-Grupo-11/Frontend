@@ -25,6 +25,8 @@ export type SesionDetalle = {
   entrevista: number;
   room_name: string;
   estado: EstadoSesion;
+  nota_final: number | string | null;
+  estado_correccion: EstadoCorreccion;
   titulo_entrevista: string;
   descripcion_entrevista: string | null;
   evaluador_nombre: string | null;
@@ -103,4 +105,33 @@ export type ResponderDto = {
   contenido_url?: string;
   casos_pasados?: number;
   tiempo_segundos?: number;
+};
+
+// ─── Calificación (Capa 4) — lado evaluador ────────────────────────────────────
+
+export type EstadoCorreccion = "pendiente" | "parcial" | "corregida";
+
+export type RespuestaCalificacion = {
+  id: number;
+  sesion: number;
+  pregunta: number;
+  pregunta_enunciado: string;
+  pregunta_formato: FormatoPregunta;
+  pregunta_puntaje: number;
+  contenido_texto: string | null;
+  respuesta_legible: string | null;
+  contenido_url: string | null;
+  casos_pasados: number | null;
+  tiempo_segundos: number | null;
+  puntaje_ia: string | null; // DecimalField → string en el JSON de DRF
+  puntaje_humano: string | null;
+  feedback_ia: string | null;
+  puntaje_final: number | null;
+  enviado_en: string;
+};
+
+export type CalificacionResp = {
+  nota_final: number | null;
+  estado_correccion: EstadoCorreccion;
+  calificadas_auto?: number;
 };
