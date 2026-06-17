@@ -19,4 +19,5 @@ export {
   useAgregarInvitado,
   useFinalizarSesion,
   useMarcarAceptado,
+  useIngresarSesion,
 } from "./hooks/useSesiones";

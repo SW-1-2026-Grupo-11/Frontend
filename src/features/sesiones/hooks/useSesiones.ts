@@ -6,6 +6,7 @@ import type {
   ActualizarObservacionesDto,
   AgregarInvitadoDto,
   CrearSesionDto,
+  Sesion,
 } from "../types";
 
 const BASE_KEY = ["sesiones"] as const;
@@ -102,6 +103,22 @@ export function useMarcarAceptado() {
       );
       if (!res.ok) throw new Error("Error al marcar invitado como aceptado");
       return res.json() as Promise<unknown>;
+    },
+  });
+}
+
+// El candidato ENTRA → su sesión NACE aquí (Capa 3). Usa fetch directo con el
+// JWT del invitado (no pasa por el interceptor Bearer del usuario autenticado).
+export function useIngresarSesion() {
+  return useMutation({
+    mutationFn: async ({ token }: { token: string }): Promise<Sesion> => {
+      const res = await fetch(`${env.API_URL}/sesiones/ingresar/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+      if (!res.ok) throw new Error("Error al ingresar a la sesión");
+      return res.json() as Promise<Sesion>;
     },
   });
 }

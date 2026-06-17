@@ -5,6 +5,7 @@ import { useJwtDecode } from "@/shared/hooks/useJwtDecode";
 import {
   useActualizarObservaciones,
   useMarcarAceptado,
+  useIngresarSesion,
 } from "@/features/sesiones";
 import type { Sesion, SesionDetalle, InvitadoSesion } from "@/features/sesiones";
 import env from "@/config/env";
@@ -91,7 +92,8 @@ export default function JoinPage() {
   );
 
   // ── Queries usando el token de la URL, no el de localStorage ──
-  const { data: sesion } = useQuery<Sesion | undefined>({
+  // Supervisor: consulta la sesión del candidato (puede no existir hasta que entra).
+  const { data: sesionSupervisor } = useQuery<Sesion | undefined>({
     queryKey: ["sesion-publica", decoded?.entrevista_id, token],
     queryFn: async () => {
       const raw = await fetchWithInvitadoToken<Sesion[] | { results: Sesion[] }>(
@@ -100,9 +102,23 @@ export default function JoinPage() {
       const list = Array.isArray(raw) ? raw : (raw as { results: Sesion[] }).results ?? [];
       return list[0];
     },
-    enabled: !!decoded?.entrevista_id && !!token,
+    enabled: !!decoded?.entrevista_id && !!token && !!decoded?.moderator,
     retry: false,
   });
+
+  // Candidato: la sesión NACE al entrar (Capa 3) → POST /sesiones/ingresar/
+  const ingresarMutation = useIngresarSesion();
+  const [ingresoSesion, setIngresoSesion] = useState<Sesion | null>(null);
+  const ingresoFiredRef = useRef(false);
+  useEffect(() => {
+    if (ingresoFiredRef.current || !decoded || decoded.moderator || !token) return;
+    ingresoFiredRef.current = true;
+    ingresarMutation.mutate({ token }, { onSuccess: (s) => setIngresoSesion(s) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [decoded, token]);
+
+  // Sesión efectiva: el candidato usa la que nació al entrar; el supervisor, la consultada.
+  const sesion = decoded?.moderator ? sesionSupervisor : ingresoSesion ?? undefined;
 
   const { data: sesionDetalle } = useQuery<SesionDetalle>({
     queryKey: ["sesion-detalle-publica", sesion?.id, token],
@@ -387,10 +403,10 @@ export default function JoinPage() {
 
   // ─── Sala de video (full-screen) ─────────────────────────────────────────
 
-  const roomName =
-    sesion?.room_name ??
-    sesionDetalle?.room_name ??
-    `entrevista-${decoded.entrevista_id}`;
+  // Room determinístico por convocatoria: candidato y supervisor coinciden siempre,
+  // sin depender de la consulta de sesión (el token de invitado no pasa por
+  // JWTAuthentication). El registro de Sesión es para los datos, no para el room.
+  const roomName = `entrevista-${decoded.entrevista_id}`;
 
   return (
     <div
