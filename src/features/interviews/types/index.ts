@@ -12,6 +12,8 @@ export type Entrevista = {
   titulo: string;
   descripcion: string;
   creada_por: number;
+  prueba: number | null;
+  prueba_nombre?: string | null;
   estado: EstadoEntrevista;
   fecha_programada: string | null;
   fecha_creacion: string;
@@ -55,6 +57,7 @@ export type ProgramarEntrevistaDto = {
   titulo: string;
   descripcion?: string;
   evaluador_id: number;
+  prueba_id?: number;
   fecha_programada: string;
   duracion_minutos: number;
   invitados: ProgramarInvitadoDto[];

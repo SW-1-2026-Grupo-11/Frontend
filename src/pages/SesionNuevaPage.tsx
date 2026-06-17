@@ -103,6 +103,7 @@ export default function SesionNuevaPage() {
   // ── Estado del formulario ──
   const [titulo, setTitulo] = useState("");
   const [entrevistaBaseId, setEntrevistaBaseId] = useState<number | null>(null);
+  const [pruebaId, setPruebaId] = useState<number | null>(null);
   const [fechaProgramada, setFechaProgramada] = useState("");
   const [duracionMinutos, setDuracionMinutos] = useState(60);
   const [evaluadorId, setEvaluadorId] = useState<number | null>(null);
@@ -198,6 +199,7 @@ export default function SesionNuevaPage() {
       titulo: titulo.trim(),
       descripcion: observaciones.trim() || undefined,
       evaluador_id: evaluadorId as number,
+      prueba_id: pruebaId ?? undefined,
       fecha_programada: new Date(fechaProgramada).toISOString(),
       duracion_minutos: duracionMinutos,
       invitados: candidatos,
@@ -377,6 +379,25 @@ export default function SesionNuevaPage() {
                     ))}
                   </select>
                 )}
+              </div>
+
+              {/* Prueba a rendir (del banco reutilizable) */}
+              <div style={fieldStyle}>
+                <label style={labelStyle}>Prueba a rendir (del banco)</label>
+                <select
+                  style={selectStyle}
+                  value={pruebaId ?? ""}
+                  onChange={(e) =>
+                    setPruebaId(e.target.value ? Number(e.target.value) : null)
+                  }
+                >
+                  <option value="">Seleccionar prueba…</option>
+                  {(pruebas ?? []).map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.titulo}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Título */}
