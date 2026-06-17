@@ -16,6 +16,7 @@ export type {
   EstadoCorreccion,
   RespuestaCalificacion,
   CalificacionResp,
+  RegistroAuditoria,
 } from "./types";
 export { sesionesService } from "./services/sesionesService";
 export { default as RendirPrueba } from "./components/RendirPrueba";
@@ -37,4 +38,5 @@ export {
   useGetRespuestas,
   useCalificarAuto,
   usePuntuar,
+  useGetAuditoria,
 } from "./hooks/useSesiones";

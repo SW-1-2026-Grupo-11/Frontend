@@ -216,3 +216,11 @@ export function usePuntuar() {
       queryClient.invalidateQueries({ queryKey: [...BASE_KEY, sesionId] }),
   });
 }
+
+export function useGetAuditoria(sesionId: number) {
+  return useQuery({
+    queryKey: [...BASE_KEY, sesionId, "auditoria"] as const,
+    queryFn: () => sesionesService.getAuditoria(sesionId),
+    enabled: sesionId > 0,
+  });
+}

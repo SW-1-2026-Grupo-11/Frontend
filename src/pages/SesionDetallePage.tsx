@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { MainLayout } from "@/shared/components/layout";
 import { useCurrentUser, useLogout } from "@/features/auth";
-import { useGetSesionDetalle, useActualizarObservaciones, CalificacionSesion } from "@/features/sesiones";
+import { useGetSesionDetalle, useActualizarObservaciones, CalificacionSesion, useGetAuditoria } from "@/features/sesiones";
 import type { InvitadoSesion } from "@/features/sesiones";
 import { useAlertas } from "@/features/alertas";
 import type { Alerta } from "@/features/alertas";
@@ -109,6 +109,8 @@ export default function SesionDetallePage() {
   // ── Queries ──
   const { data: sesionDetalle, isLoading: sesionLoading, isError: sesionError } =
     useGetSesionDetalle(sesionId);
+
+  const { data: auditoria = [] } = useGetAuditoria(sesionId);
 
   const entrevistaId = sesionDetalle?.entrevista ?? 0;
 
@@ -721,6 +723,40 @@ export default function SesionDetallePage() {
         </div>
 
         {/* ── SECCIÓN 6: Feedback consolidado ───────────────────────────────── */}
+        {/* ── Registro de auditoría (Capa 4c) ── */}
+        <div style={card}>
+          <h2 style={cardTitle}>Registro de auditoría</h2>
+          {auditoria.length === 0 ? (
+            <p style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)", margin: 0 }}>
+              Sin eventos registrados.
+            </p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {auditoria.map((ev) => (
+                <div
+                  key={ev.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    fontSize: "var(--font-size-xs)",
+                    paddingBottom: 6,
+                    borderBottom: "1px solid var(--color-border)",
+                  }}
+                >
+                  <span style={{ color: "var(--color-text-muted)", fontFamily: "monospace", flexShrink: 0 }}>
+                    {fmtDateTime(ev.timestamp)}
+                  </span>
+                  <span style={{ fontWeight: "var(--font-weight-semibold)", color: "var(--color-text)" }}>
+                    {ev.accion}
+                  </span>
+                  <span style={{ color: "var(--color-text-muted)", marginLeft: "auto" }}>{ev.actor}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div style={card}>
           <h2 style={cardTitle}>Feedback consolidado</h2>
 

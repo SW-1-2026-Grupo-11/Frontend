@@ -9,6 +9,7 @@ import type {
   InvitadoSesion,
   RespuestaCalificacion,
   CalificacionResp,
+  RegistroAuditoria,
 } from "../types";
 
 export const sesionesService = {
@@ -62,4 +63,7 @@ export const sesionesService = {
         puntaje_humano: puntaje,
       })
       .then((r) => r.data),
+
+  getAuditoria: (sesionId: number): Promise<RegistroAuditoria[]> =>
+    api.get<RegistroAuditoria[]>(`/sesiones/${sesionId}/auditoria/`).then((r) => r.data),
 };

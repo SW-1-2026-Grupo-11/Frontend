@@ -135,3 +135,13 @@ export type CalificacionResp = {
   estado_correccion: EstadoCorreccion;
   calificadas_auto?: number;
 };
+
+export type RegistroAuditoria = {
+  id: number;
+  actor: string;
+  accion: string;
+  entidad: string | null;
+  entidad_id: number | null;
+  detalle: Record<string, unknown> | null;
+  timestamp: string;
+};
