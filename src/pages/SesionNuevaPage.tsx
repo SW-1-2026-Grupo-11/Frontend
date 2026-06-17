@@ -33,6 +33,7 @@ type Toast = { mensaje: string; tipo: "success" | "error" };
 
 type ValidationErrors = {
   titulo?: string;
+  prueba?: string;
   evaluador?: string;
   fecha?: string;
   candidatos?: string;
@@ -163,6 +164,7 @@ export default function SesionNuevaPage() {
   const validate = (): boolean => {
     const nuevos: ValidationErrors = {};
     if (!titulo.trim()) nuevos.titulo = "El título es requerido";
+    if (!pruebaId) nuevos.prueba = "Selecciona una prueba del banco";
     if (!evaluadorId) nuevos.evaluador = "Selecciona un evaluador";
     if (!fechaProgramada) nuevos.fecha = "La fecha es requerida";
     if (candidatos.length === 0)
@@ -318,13 +320,20 @@ export default function SesionNuevaPage() {
             >
               {/* Prueba a rendir (del banco reutilizable) */}
               <div style={fieldStyle}>
-                <label style={labelStyle}>Prueba a rendir (del banco)</label>
+                <label style={labelStyle}>Prueba a rendir (del banco) *</label>
                 <select
-                  style={selectStyle}
+                  style={{
+                    ...selectStyle,
+                    border: errores.prueba
+                      ? "1px solid var(--color-danger)"
+                      : "1px solid var(--color-border)",
+                  }}
                   value={pruebaId ?? ""}
-                  onChange={(e) =>
-                    setPruebaId(e.target.value ? Number(e.target.value) : null)
-                  }
+                  onChange={(e) => {
+                    setPruebaId(e.target.value ? Number(e.target.value) : null);
+                    if (errores.prueba)
+                      setErrores((p) => ({ ...p, prueba: undefined }));
+                  }}
                 >
                   <option value="">Seleccionar prueba…</option>
                   {(pruebas ?? []).map((p) => (
@@ -333,6 +342,16 @@ export default function SesionNuevaPage() {
                     </option>
                   ))}
                 </select>
+                {errores.prueba && (
+                  <span
+                    style={{
+                      fontSize: "var(--font-size-sm)",
+                      color: "var(--color-danger)",
+                    }}
+                  >
+                    {errores.prueba}
+                  </span>
+                )}
               </div>
 
               {/* Título */}

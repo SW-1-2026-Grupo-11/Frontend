@@ -25,6 +25,7 @@ export {
   useGetSesiones,
   useCrearSesion,
   useGetSesionPorEntrevista,
+  useGetSesionesDeConvocatoria,
   useGetSesionDetalle,
   useActualizarEstadoSesion,
   useActualizarObservaciones,

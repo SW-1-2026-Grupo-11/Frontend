@@ -38,6 +38,15 @@ export function useGetSesionPorEntrevista(entrevistaId: number) {
   });
 }
 
+// Todas las sesiones de una convocatoria (para el detalle: candidato → su sesión)
+export function useGetSesionesDeConvocatoria(entrevistaId: number) {
+  return useQuery({
+    queryKey: [...BASE_KEY, "de-convocatoria", entrevistaId] as const,
+    queryFn: () => sesionesService.getSesionesPorEntrevista(entrevistaId),
+    enabled: entrevistaId > 0,
+  });
+}
+
 export function useGetSesionDetalle(sesionId: number) {
   return useQuery({
     queryKey: [...BASE_KEY, sesionId, "detalle"] as const,

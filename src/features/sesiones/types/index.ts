@@ -11,9 +11,12 @@ export type InvitadoSesion = {
 export type Sesion = {
   id: number;
   entrevista: number;
+  invitacion: number | null;
   creada_por: number;
   room_name: string;
   estado: EstadoSesion;
+  nota_final: number | string | null;
+  estado_correccion: EstadoCorreccion;
   observaciones_internas: string | null;
   fecha_inicio: string;
   fecha_fin: string | null;

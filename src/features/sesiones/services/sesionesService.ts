@@ -25,6 +25,16 @@ export const sesionesService = {
   getSesionPorEntrevista: (entrevistaId: number): Promise<Sesion> =>
     api.get<Sesion>(`/sesiones/${entrevistaId}/`).then((r) => r.data),
 
+  getSesionesPorEntrevista: (entrevistaId: number): Promise<Sesion[]> =>
+    api
+      .get<Sesion[] | { results: Sesion[] }>("/sesiones/", {
+        params: { entrevista: entrevistaId },
+      })
+      .then((r) => {
+        const d = r.data;
+        return Array.isArray(d) ? d : (d as { results: Sesion[] }).results ?? [];
+      }),
+
   getSesionDetalle: (sesionId: number): Promise<SesionDetalle> =>
     api.get<SesionDetalle>(`/sesiones/${sesionId}/detalle/`).then((r) => r.data),
 
