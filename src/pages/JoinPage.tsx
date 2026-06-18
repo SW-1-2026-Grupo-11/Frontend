@@ -10,11 +10,10 @@ import type {
   PruebaCandidato,
 } from "@/features/sesiones";
 import env from "@/config/env";
-import { useProctoring, proctoringService } from "@/features/proctoring";
+import { useProctoring } from "@/features/proctoring";
 import { JitsiRoom } from "@/features/supervision";
 import type { JitsiRoomHandle } from "@/features/supervision";
 import Button from "@/shared/components/ui/Button";
-import { PROCTORING } from "@/config/constants";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -50,8 +49,9 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function JoinPage() {
   // ── URL search params ──
-  const rawSearch = useSearch({ strict: false }) as { token?: string };
+  const rawSearch = useSearch({ strict: false }) as { token?: string; watch?: string };
   const token = rawSearch.token ?? "";
+  const watchInvitadoId = rawSearch.watch ?? "";
 
   // ── JWT decode ──
   const decoded = useJwtDecode(token || null);
@@ -196,28 +196,9 @@ export default function JoinPage() {
     return () => clearInterval(id);
   }, [fase]);
 
-  // ── Captura de frames Jitsi para IA (candidatos únicamente) ──
-  useEffect(() => {
-    if (!jitsiJoined || decoded?.moderator || !decoded) return;
-
-    const id = setInterval(() => {
-      jitsiRef.current
-        ?.captureScreenshot()
-        .then((data) => {
-          if (!data?.dataURL) return;
-          void proctoringService.analyzeFrame({
-            entrevista_id: String(decoded.entrevista_id),
-            participante_id: String(decoded.invitado_id ?? 0),
-            frame: data.dataURL,
-            timestamp: new Date().toISOString(),
-            session_id: sesion ? String(sesion.id) : undefined,
-          });
-        })
-        .catch(() => undefined);
-    }, PROCTORING.FRAME_INTERVAL_MS);
-
-    return () => clearInterval(id);
-  }, [jitsiJoined, decoded, sesion]);
+  // Proctoring desacoplado: la IA usa la cámara directa (useProctoring →
+  // getUserMedia), NO screenshots de Jitsi → siempre analiza al candidato,
+  // sin importar quién sea el "video grande" ni si se comparte pantalla.
 
   // ── Inicializar observaciones desde el detalle (solo la primera vez que llega) ──
   const obsInitRef = useRef(false);
@@ -442,10 +423,14 @@ export default function JoinPage() {
 
   // ─── Sala de video (full-screen) ─────────────────────────────────────────
 
-  // Room determinístico por convocatoria: candidato y supervisor coinciden siempre,
-  // sin depender de la consulta de sesión (el token de invitado no pasa por
-  // JWTAuthentication). El registro de Sesión es para los datos, no para el room.
-  const roomName = `entrevista-${decoded.entrevista_id}`;
+  // 1 SALA POR CANDIDATO (regla del plan): el candidato entra a SU sala (inv-<id>),
+  // nunca compartida. El supervisor entra a la sala del candidato que eligió
+  // (?watch=<invitado_id>); sin elegir, cae en una sala por convocatoria (vacía).
+  const roomName = decoded.moderator
+    ? watchInvitadoId
+      ? `inv-${watchInvitadoId}`
+      : `entrevista-${decoded.entrevista_id}`
+    : `inv-${decoded.invitado_id}`;
 
   const jitsiEl = (
     <JitsiRoom

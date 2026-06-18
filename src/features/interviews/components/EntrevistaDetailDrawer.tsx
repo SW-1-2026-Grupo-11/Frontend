@@ -73,8 +73,9 @@ export default function EntrevistaDetailDrawer({
     sesiones.filter((s) => s.invitacion != null).map((s) => [s.invitacion, s]),
   );
 
-  // Fold de Supervisión: entrar a la sala como supervisor (link guardado al programar)
-  const handleSupervisar = () => {
+  // Supervisar EN VIVO a un candidato puntual: hay 1 sala por candidato (inv-<id>),
+  // así que el supervisor entra a la sala de ESE candidato vía ?watch=<invitado_id>.
+  const handleSupervisarCandidato = (invitadoId: number) => {
     const link = localStorage.getItem(`link_supervisor_entrevista_${entrevista.id}`);
     if (!link) {
       setSupMsg(
@@ -85,9 +86,10 @@ export default function EntrevistaDetailDrawer({
     }
     try {
       const url = new URL(link);
+      url.searchParams.set("watch", String(invitadoId));
       window.location.href = `${window.location.origin}${url.pathname}${url.search}`;
     } catch {
-      window.location.href = link;
+      window.location.href = `${link}${link.includes("?") ? "&" : "?"}watch=${invitadoId}`;
     }
   };
 
@@ -199,9 +201,9 @@ export default function EntrevistaDetailDrawer({
           >
             {ENTREVISTAS.ESTADO_LABELS[entrevista.estado as EstadoEntrevista]}
           </Badge>
-          <Button variant="primary" size="sm" onClick={handleSupervisar}>
-            🎥 Supervisar en vivo
-          </Button>
+          <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
+            Supervisá a cada candidato desde su fila ↓
+          </span>
         </div>
         {supMsg && (
           <p style={{ margin: 0, fontSize: "var(--font-size-sm)", color: "var(--color-danger)" }}>
@@ -319,6 +321,24 @@ export default function EntrevistaDetailDrawer({
                     <Badge variant={INV_ESTADO_BADGE[inv.estado] ?? "neutral"}>
                       {INV_ESTADO_LABEL[inv.estado] ?? inv.estado}
                     </Badge>
+                    <button
+                      onClick={() => handleSupervisarCandidato(inv.id)}
+                      title="Supervisar en vivo a este candidato"
+                      style={{
+                        padding: "4px 10px",
+                        background: "transparent",
+                        border: "1px solid var(--color-primary)",
+                        borderRadius: "var(--radius-sm)",
+                        color: "var(--color-primary)",
+                        cursor: "pointer",
+                        fontSize: "var(--font-size-xs)",
+                        fontFamily: "inherit",
+                        flexShrink: 0,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      🎥 Supervisar
+                    </button>
                     {(() => {
                       const ses = sesionPorInvitado.get(inv.id);
                       if (!ses) return null;
