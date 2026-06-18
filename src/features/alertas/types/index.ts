@@ -25,8 +25,9 @@ export type AlertasFilter = {
 
 export type Alerta = {
   id: number;
-  entrevista: number;
-  participante: number;
+  sesion: number | null;
+  entrevista: number | null;
+  participante_nombre?: string | null;
   tipo_alerta: TipoAlerta | string;
   severidad: Severidad;
   origen: string;

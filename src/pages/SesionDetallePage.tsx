@@ -205,7 +205,7 @@ export default function SesionDetallePage() {
 
   async function handleGenerarReporteParticipante(inv: InvitadoSesion) {
     if (!sesionDetalle) return;
-    const partAlertas = alertas.filter((a) => a.participante === inv.id);
+    const partAlertas = alertas.filter((a) => a.participante_nombre === inv.nombre);
     const integridad = calcularIntegridad(partAlertas);
     const key = String(inv.id);
     setGenerandoReporte((prev) => ({ ...prev, [key]: true }));
@@ -523,7 +523,7 @@ export default function SesionDetallePage() {
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16 }}>
               {sesionDetalle.invitados.map((inv, idx) => {
-                const partAlertas = alertas.filter((a) => a.participante === inv.id);
+                const partAlertas = alertas.filter((a) => a.participante_nombre === inv.nombre);
                 const integridad = calcularIntegridad(partAlertas);
                 const sortedAlertas = [...partAlertas].sort(
                   (a, b) => new Date(b.timestamp_alerta).getTime() - new Date(a.timestamp_alerta).getTime(),
