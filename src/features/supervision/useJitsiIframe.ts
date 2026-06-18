@@ -17,6 +17,7 @@ type UseJitsiIframeParams = {
   displayName: string;
   email?: string;
   isModerator: boolean;
+  jwt?: string;
   callbacks?: JitsiCallbacksIframe;
 };
 
@@ -26,6 +27,7 @@ export default function useJitsiIframe({
   displayName,
   email,
   isModerator,
+  jwt,
   callbacks,
 }: UseJitsiIframeParams) {
   const [isLoaded, setIsLoaded] = useState(false);
@@ -62,6 +64,7 @@ export default function useJitsiIframe({
           width: "100%",
           height: "100%",
           userInfo: { displayName, email },
+          jwt,
           configOverwrite,
           interfaceConfigOverwrite: {
             TOOLBAR_BUTTONS: [
@@ -149,7 +152,7 @@ export default function useJitsiIframe({
       apiRef.current?.dispose();
       apiRef.current = null;
     };
-  }, [roomName, displayName, email, isModerator, containerRef]);
+  }, [roomName, displayName, email, isModerator, jwt, containerRef]);
 
   const hangup = useCallback(() => {
     apiRef.current?.executeCommand("hangup");

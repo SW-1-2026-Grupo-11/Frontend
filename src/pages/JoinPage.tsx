@@ -159,6 +159,28 @@ export default function JoinPage() {
     cargarRendir();
   }, [decoded, token, cargarRendir]);
 
+  // JWT de Jitsi: SOLO si el dominio es propio (la pública meet.jit.si no lo usa
+  // y rechazaría un token nuestro). Candidato → su sala; supervisor → la sala
+  // del candidato que mira (?watch=).
+  const selfHostedJitsi = env.JITSI_DOMAIN !== "meet.jit.si";
+  const [jitsiJwt, setJitsiJwt] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    if (!selfHostedJitsi || !decoded || !token) return;
+    if (decoded.moderator && !watchInvitadoId) return;
+    const body: { token: string; watch?: string } = { token };
+    if (decoded.moderator) body.watch = watchInvitadoId;
+    fetch(`${env.API_URL}/sesiones/jitsi-token/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.jwt) setJitsiJwt(d.jwt as string);
+      })
+      .catch(() => undefined);
+  }, [selfHostedJitsi, decoded, token, watchInvitadoId]);
+
   // Sesión efectiva: candidato = la de /rendir/; supervisor = la consultada.
   const sesion = decoded?.moderator ? sesionSupervisor : rendir?.sesion ?? undefined;
 
@@ -439,6 +461,7 @@ export default function JoinPage() {
       displayName={decoded.nombre}
       email={decoded.email}
       isModerator={decoded.moderator}
+      jwt={jitsiJwt}
       onConferenceJoined={handleConferenceJoined}
       onParticipantJoined={handleParticipantJoined}
       onParticipantLeft={handleParticipantLeft}
