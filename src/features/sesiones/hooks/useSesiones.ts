@@ -5,9 +5,7 @@ import type {
   ActualizarEstadoDto,
   ActualizarObservacionesDto,
   AgregarInvitadoDto,
-  CrearSesionDto,
   Sesion,
-  PruebaCandidato,
   ResponderDto,
 } from "../types";
 
@@ -17,24 +15,6 @@ export function useGetSesiones() {
   return useQuery({
     queryKey: BASE_KEY,
     queryFn: () => sesionesService.listarSesiones(),
-  });
-}
-
-export function useCrearSesion() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (dto: CrearSesionDto) => sesionesService.crearSesion(dto),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: BASE_KEY });
-    },
-  });
-}
-
-export function useGetSesionPorEntrevista(entrevistaId: number) {
-  return useQuery({
-    queryKey: [...BASE_KEY, "entrevista", entrevistaId] as const,
-    queryFn: () => sesionesService.getSesionPorEntrevista(entrevistaId),
-    enabled: entrevistaId > 0,
   });
 }
 
@@ -88,113 +68,7 @@ export function useAgregarInvitado() {
   });
 }
 
-export function useFinalizarSesion() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (sesionId: number) => sesionesService.finalizarSesion(sesionId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: BASE_KEY });
-    },
-  });
-}
-
-// Usa fetch directo con el JWT del invitado — no pasa por el interceptor Bearer del usuario autenticado
-export function useMarcarAceptado() {
-  return useMutation({
-    mutationFn: async ({ invitadoId, token }: { invitadoId: number; token: string }) => {
-      const res = await fetch(
-        `${env.API_URL}/entrevistas/invitados/${invitadoId}/marcar-aceptado/`,
-        {
-          method: "PATCH",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        },
-      );
-      if (!res.ok) throw new Error("Error al marcar invitado como aceptado");
-      return res.json() as Promise<unknown>;
-    },
-  });
-}
-
-// El candidato ENTRA → su sesión NACE aquí (Capa 3). Usa fetch directo con el
-// JWT del invitado (no pasa por el interceptor Bearer del usuario autenticado).
-export function useIngresarSesion() {
-  return useMutation({
-    mutationFn: async ({ token }: { token: string }): Promise<Sesion> => {
-      const ctrl = new AbortController();
-      const timeout = setTimeout(() => ctrl.abort(), 12000);
-      try {
-        const res = await fetch(`${env.API_URL}/sesiones/ingresar/`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token }),
-          signal: ctrl.signal,
-        });
-        if (!res.ok) {
-          let detail = `Error ${res.status}`;
-          try {
-            const e = (await res.json()) as { detail?: string };
-            if (e?.detail) detail = e.detail;
-          } catch {
-            /* respuesta sin cuerpo JSON */
-          }
-          throw new Error(detail);
-        }
-        return (await res.json()) as Sesion;
-      } catch (err) {
-        if (err instanceof DOMException && err.name === "AbortError") {
-          throw new Error(
-            "El servidor no respondió (timeout 12s). Revisa que el backend esté arriba o avisa al evaluador.",
-          );
-        }
-        throw err;
-      } finally {
-        clearTimeout(timeout);
-      }
-    },
-  });
-}
-
 // ─── Rendir prueba (Capa 3c) — todo con el JWT del invitado ────────────────────
-
-// Contenido de la prueba para que el candidato la rinda (sin respuestas correctas)
-export function useGetPruebaCandidato(sesionId: number | undefined, token: string | null) {
-  return useQuery({
-    queryKey: [...BASE_KEY, "prueba-candidato", sesionId] as const,
-    queryFn: async (): Promise<PruebaCandidato> => {
-      const ctrl = new AbortController();
-      const timeout = setTimeout(() => ctrl.abort(), 12000);
-      try {
-        const res = await fetch(`${env.API_URL}/sesiones/${sesionId}/prueba/`, {
-          headers: { Authorization: `Bearer ${token}` },
-          signal: ctrl.signal,
-        });
-        if (!res.ok) {
-          let detail = `HTTP ${res.status}`;
-          try {
-            const e = (await res.json()) as { detail?: string };
-            if (e?.detail) detail = e.detail;
-          } catch {
-            /* sin cuerpo JSON */
-          }
-          throw new Error(detail);
-        }
-        return (await res.json()) as PruebaCandidato;
-      } catch (err) {
-        if (err instanceof DOMException && err.name === "AbortError") {
-          throw new Error("Timeout (12s) al cargar la prueba.");
-        }
-        throw err;
-      } finally {
-        clearTimeout(timeout);
-      }
-    },
-    enabled: !!sesionId && !!token,
-    retry: false,
-  });
-}
 
 // Enviar (o actualizar) la respuesta de una pregunta
 export function useResponder() {

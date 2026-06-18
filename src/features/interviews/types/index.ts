@@ -5,8 +5,6 @@ export type EstadoEntrevista =
   | "finalizada"
   | "cancelada";
 
-export type EstadoAsignacion = "asignada" | "inactiva" | "cancelada";
-
 export type Entrevista = {
   id: number;
   titulo: string;
@@ -20,17 +18,6 @@ export type Entrevista = {
   fecha_actualizacion: string;
 };
 
-export type PruebaEntrevista = {
-  id: number;
-  entrevista: number;
-  prueba: number;
-  asignada_por: number;
-  estado: EstadoAsignacion;
-  observaciones: string;
-  fecha_asignacion: string;
-  fecha_actualizacion: string;
-};
-
 export type CreateEntrevistaDto = {
   titulo: string;
   descripcion: string;
@@ -40,13 +27,6 @@ export type CreateEntrevistaDto = {
 };
 
 export type UpdateEntrevistaDto = Partial<Omit<CreateEntrevistaDto, "creada_por">>;
-
-export type AsignarPruebaDto = {
-  entrevista: number;
-  prueba: number;
-  asignada_por: number;
-  observaciones?: string;
-};
 
 export type ProgramarInvitadoDto = {
   nombre: string;

@@ -23,17 +23,11 @@ export { default as RendirPrueba } from "./components/RendirPrueba";
 export { default as CalificacionSesion } from "./components/CalificacionSesion";
 export {
   useGetSesiones,
-  useCrearSesion,
-  useGetSesionPorEntrevista,
   useGetSesionesDeConvocatoria,
   useGetSesionDetalle,
   useActualizarEstadoSesion,
   useActualizarObservaciones,
   useAgregarInvitado,
-  useFinalizarSesion,
-  useMarcarAceptado,
-  useIngresarSesion,
-  useGetPruebaCandidato,
   useResponder,
   useFinalizarCandidato,
   useGetRespuestas,

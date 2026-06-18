@@ -17,20 +17,6 @@ export const PROCTORING = {
   },
 } as const;
 
-export const JITSI = {
-  TOOLBAR_BUTTONS: [
-    "microphone",
-    "camera",
-    "desktop",
-    "chat",
-    "raisehand",
-    "tileview",
-    "hangup",
-  ],
-  DEFAULT_ROOM_PREFIX: "supervision-session",
-  IFRAME_CONTAINER_ID: "jitsi-container",
-} as const;
-
 export const PRUEBAS = {
   TIPOS: ["teorica", "tecnica", "mixta"] as const,
   TIPO_LABELS: {
