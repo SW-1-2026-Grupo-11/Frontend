@@ -30,6 +30,9 @@ export const entrevistasService = {
   deleteEntrevista: (id: number): Promise<void> =>
     api.delete(`/entrevistas/entrevistas/${id}/`).then(() => undefined),
 
+  cancelarEntrevista: (id: number): Promise<Entrevista> =>
+    api.post<Entrevista>(`/entrevistas/entrevistas/${id}/cancelar/`, {}).then((r) => r.data),
+
   programarEntrevista: (dto: ProgramarEntrevistaDto): Promise<ProgramarEntrevistaResponse> =>
     api
       .post<ProgramarEntrevistaResponse>("/entrevistas/entrevistas/programar/", dto)

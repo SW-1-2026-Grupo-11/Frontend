@@ -55,6 +55,16 @@ export function useDeleteEntrevista() {
   });
 }
 
+export function useCancelarEntrevista() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => entrevistasService.cancelarEntrevista(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: BASE_KEY });
+    },
+  });
+}
+
 export function useProgramarEntrevista() {
   const queryClient = useQueryClient();
   return useMutation({

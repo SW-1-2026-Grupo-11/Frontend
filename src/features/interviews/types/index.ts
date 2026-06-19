@@ -12,7 +12,8 @@ export type Entrevista = {
   creada_por: number;
   prueba: number | null;
   prueba_nombre?: string | null;
-  estado: EstadoEntrevista;
+  estado: EstadoEntrevista; // crudo (solo manual: borrador/cancelada)
+  estado_efectivo: EstadoEntrevista; // derivado del tiempo — lo que se MUESTRA
   fecha_programada: string | null;
   fecha_creacion: string;
   fecha_actualizacion: string;
@@ -39,7 +40,8 @@ export type ProgramarEntrevistaDto = {
   evaluador_id: number;
   prueba_id?: number;
   fecha_programada: string;
-  duracion_minutos: number;
+  // OPCIONAL: vacío = hereda la duración de la prueba (fuente de verdad).
+  duracion_minutos?: number | null;
   invitados: ProgramarInvitadoDto[];
 };
 

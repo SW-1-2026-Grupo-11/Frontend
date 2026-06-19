@@ -66,7 +66,7 @@ export default function EntrevistasTable({ estadoFilter, onView, onEdit }: Entre
   }
 
   const filtered = estadoFilter
-    ? (entrevistas ?? []).filter((e) => e.estado === estadoFilter)
+    ? (entrevistas ?? []).filter((e) => e.estado_efectivo === estadoFilter)
     : (entrevistas ?? []);
 
   if (filtered.length === 0) {
@@ -142,10 +142,10 @@ export default function EntrevistasTable({ estadoFilter, onView, onEdit }: Entre
               <td style={tdStyle}>
                 <Badge
                   variant={
-                    ENTREVISTAS.ESTADO_BADGE[entrevista.estado as EstadoEntrevista] as BadgeVariant
+                    ENTREVISTAS.ESTADO_BADGE[entrevista.estado_efectivo] as BadgeVariant
                   }
                 >
-                  {ENTREVISTAS.ESTADO_LABELS[entrevista.estado as EstadoEntrevista]}
+                  {ENTREVISTAS.ESTADO_LABELS[entrevista.estado_efectivo]}
                 </Badge>
               </td>
               <td style={{ ...tdStyle, color: "var(--color-text-muted)" }}>

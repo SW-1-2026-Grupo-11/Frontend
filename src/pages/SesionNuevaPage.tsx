@@ -99,7 +99,8 @@ export default function SesionNuevaPage() {
   const [titulo, setTitulo] = useState("");
   const [pruebaId, setPruebaId] = useState<number | null>(null);
   const [fechaProgramada, setFechaProgramada] = useState("");
-  const [duracionMinutos, setDuracionMinutos] = useState(60);
+  // null = heredar la duración de la prueba (lo normal). Un número = override.
+  const [duracionMinutos, setDuracionMinutos] = useState<number | null>(null);
   const [evaluadorId, setEvaluadorId] = useState<number | null>(null);
   const [observaciones, setObservaciones] = useState("");
   const [candidatos, setCandidatos] = useState<Candidato[]>([]);
@@ -123,6 +124,8 @@ export default function SesionNuevaPage() {
   // ── Carga de datos ──
   const { data: usuarios, isLoading: loadingUsuarios } = useGetUsuarios();
   const { data: pruebas } = useGetPruebas();
+  // Duración por defecto = la de la prueba elegida (fuente de verdad).
+  const pruebaDuracion = (pruebas ?? []).find((p) => p.id === pruebaId)?.duracion_minutos ?? null;
 
   // ── Mutaciones ──
   const programarMutation = useProgramarEntrevista();
@@ -182,7 +185,8 @@ export default function SesionNuevaPage() {
       evaluador_id: evaluadorId as number,
       prueba_id: pruebaId ?? undefined,
       fecha_programada: new Date(fechaProgramada).toISOString(),
-      duracion_minutos: duracionMinutos,
+      // Si va null, no se envía → la convocatoria hereda la duración de la prueba.
+      duracion_minutos: duracionMinutos ?? undefined,
       invitados: candidatos,
     };
 
@@ -408,15 +412,28 @@ export default function SesionNuevaPage() {
                   <label style={labelStyle}>Duración</label>
                   <select
                     style={selectStyle}
-                    value={duracionMinutos}
-                    onChange={(e) => setDuracionMinutos(Number(e.target.value))}
+                    value={duracionMinutos ?? ""}
+                    onChange={(e) =>
+                      setDuracionMinutos(e.target.value === "" ? null : Number(e.target.value))
+                    }
                   >
+                    <option value="">
+                      {pruebaDuracion
+                        ? `Usar el tiempo de la prueba (${pruebaDuracion} min)`
+                        : "Usar el tiempo de la prueba"}
+                    </option>
                     {DURACION_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>
                         {opt.label}
                       </option>
                     ))}
                   </select>
+                  <span
+                    style={{ fontSize: "var(--font-size-sm)", color: "var(--color-text-muted)" }}
+                  >
+                    Vacío = usa el tiempo de la prueba. Cámbialo solo para dar más/menos
+                    tiempo a esta convocatoria.
+                  </span>
                 </div>
               </div>
 
@@ -981,7 +998,12 @@ export default function SesionNuevaPage() {
                         : "Por definir"}
                     </div>
                     <div>
-                      <strong>Duración:</strong> {duracionMinutos} minutos
+                      <strong>Duración:</strong>{" "}
+                      {duracionMinutos != null
+                        ? `${duracionMinutos} minutos`
+                        : pruebaDuracion
+                          ? `${pruebaDuracion} minutos (de la prueba)`
+                          : "Tiempo de la prueba"}
                     </div>
                     {evaluador && (
                       <div>

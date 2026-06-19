@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearch } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useJwtDecode } from "@/shared/hooks/useJwtDecode";
-import { useActualizarObservaciones, RendirPrueba } from "@/features/sesiones";
+import { useActualizarObservaciones, useFinalizarCandidato, RendirPrueba } from "@/features/sesiones";
 import type {
   Sesion,
   SesionDetalle,
@@ -200,6 +200,7 @@ export default function JoinPage() {
 
   // ── Mutaciones ──
   const actualizarObsMutation = useActualizarObservaciones();
+  const finalizarCandidato = useFinalizarCandidato();
 
   // ── Proctoring (solo candidatos, se activa cuando entran a la sala) ──
   const proctoring = useProctoring({
@@ -212,11 +213,27 @@ export default function JoinPage() {
   // (El invitado se marca "aceptado" automáticamente dentro del endpoint `ingresar`.)
 
   // ── Timer de sesión ──
+  // El candidato ve una CUENTA REGRESIVA hasta su deadline (auto-entrega en 0);
+  // el supervisor ve el tiempo transcurrido. `nowMs` tickea cada segundo.
+  const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
     if (fase !== "sala") return;
-    const id = setInterval(() => setTimerSeconds((s) => s + 1), 1000);
+    const id = setInterval(() => {
+      setNowMs(Date.now());
+      setTimerSeconds((s) => s + 1);
+    }, 1000);
     return () => clearInterval(id);
   }, [fase]);
+
+  // Deadline del candidato (la sesión de /rendir/ trae `deadline`). El supervisor
+  // no tiene countdown propio.
+  const deadlineMs =
+    !decoded?.moderator && rendir?.sesion?.deadline
+      ? new Date(rendir.sesion.deadline).getTime()
+      : null;
+  const remainingSecs =
+    deadlineMs !== null ? Math.max(0, Math.round((deadlineMs - nowMs) / 1000)) : null;
+  const tiempoPorAcabarse = remainingSecs !== null && remainingSecs <= 120; // aviso ≤ 2 min
 
   // Proctoring desacoplado: la IA usa la cámara directa (useProctoring →
   // getUserMedia), NO screenshots de Jitsi → siempre analiza al candidato,
@@ -242,6 +259,22 @@ export default function JoinPage() {
   const handleReintentarIngreso = () => {
     cargarRendir();
   };
+
+  // ── Auto-entrega: al llegar a 0 el countdown, se entrega la prueba sola ──
+  // (el server también rechaza responder pasado el deadline; esto es la comodidad
+  // del front: cierra y saca al candidato sin que tenga que hacer nada).
+  const autoEntregaRef = useRef(false);
+  useEffect(() => {
+    if (autoEntregaRef.current) return;
+    if (remainingSecs === null || remainingSecs > 0) return;
+    const sesionId = rendir?.sesion?.id;
+    if (!sesionId || !token || fase !== "sala") return;
+    autoEntregaRef.current = true;
+    finalizarCandidato.mutate(
+      { sesionId, token },
+      { onSettled: () => handleSalir() },
+    );
+  }, [remainingSecs, rendir, token, fase, finalizarCandidato]);
 
   const handleConferenceJoined = useCallback(() => {
     setJitsiJoined(true);
@@ -521,18 +554,30 @@ export default function JoinPage() {
           </span>
         </div>
 
-        {/* Centro: timer */}
+        {/* Centro: timer — candidato = cuenta regresiva al deadline; supervisor = transcurrido */}
         <div
+          title={remainingSecs !== null ? "Tiempo restante para entregar" : "Tiempo en sala"}
           style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
             fontSize: "var(--font-size-base)",
             fontWeight: "var(--font-weight-bold)",
-            color: "rgba(255,255,255,0.9)",
+            color: tiempoPorAcabarse ? "#f87171" : "rgba(255,255,255,0.9)",
             fontVariantNumeric: "tabular-nums",
             minWidth: "60px",
             textAlign: "center",
+            transition: "color 0.3s",
           }}
         >
-          {formatSeconds(timerSeconds)}
+          {remainingSecs !== null ? (
+            <>
+              <span>{tiempoPorAcabarse ? "⏰" : "⏱️"}</span>
+              <span>{formatSeconds(remainingSecs)}</span>
+            </>
+          ) : (
+            formatSeconds(timerSeconds)
+          )}
         </div>
 
         {/* Derecha: badge + botones */}

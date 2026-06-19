@@ -5,7 +5,7 @@ import { Badge, Button, Spinner } from "@/shared/components/ui";
 import { ENTREVISTAS } from "@/config/constants";
 import { useGetSesionesDeConvocatoria } from "@/features/sesiones";
 import { useGetInvitadosPorEntrevista } from "../hooks/useEntrevistas";
-import type { Entrevista, EstadoEntrevista } from "../types";
+import type { Entrevista } from "../types";
 
 const INV_AVATAR_COLORS = ["#1d4ed8", "#7c3aed", "#0891b2", "#be185d", "#15803d", "#b45309"];
 
@@ -196,10 +196,10 @@ export default function EntrevistaDetailDrawer({
         >
           <Badge
             variant={
-              ENTREVISTAS.ESTADO_BADGE[entrevista.estado as EstadoEntrevista] as BadgeVariant
+              ENTREVISTAS.ESTADO_BADGE[entrevista.estado_efectivo] as BadgeVariant
             }
           >
-            {ENTREVISTAS.ESTADO_LABELS[entrevista.estado as EstadoEntrevista]}
+            {ENTREVISTAS.ESTADO_LABELS[entrevista.estado_efectivo]}
           </Badge>
           <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
             Supervisá a cada candidato desde su fila ↓

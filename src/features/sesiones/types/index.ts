@@ -1,5 +1,7 @@
 export type EstadoSesion = "activa" | "iniciada" | "finalizada";
 
+export type MotivoCierre = "entregada" | "vencida" | "terminada";
+
 export type InvitadoSesion = {
   id: number;
   nombre: string;
@@ -15,11 +17,14 @@ export type Sesion = {
   creada_por: number;
   room_name: string;
   estado: EstadoSesion;
+  motivo_cierre: MotivoCierre | null;
   nota_final: number | string | null;
   estado_correccion: EstadoCorreccion;
   observaciones_internas: string | null;
   fecha_inicio: string;
   fecha_fin: string | null;
+  deadline: string; // límite de entrega = fecha_inicio + duración efectiva
+  duracion_efectiva_minutos: number;
   fecha_actualizacion: string;
 };
 
@@ -28,6 +33,7 @@ export type SesionDetalle = {
   entrevista: number;
   room_name: string;
   estado: EstadoSesion;
+  motivo_cierre: MotivoCierre | null;
   nota_final: number | string | null;
   estado_correccion: EstadoCorreccion;
   titulo_entrevista: string;
@@ -38,6 +44,7 @@ export type SesionDetalle = {
   fecha_programada: string | null;
   fecha_inicio: string;
   fecha_fin: string | null;
+  deadline: string;
   observaciones_internas: string | null;
   link_supervisor?: string | null;
   invitados: InvitadoSesion[];
