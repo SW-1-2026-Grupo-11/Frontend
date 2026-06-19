@@ -58,6 +58,12 @@ export default function useJitsiIframe({
           configOverwrite.startAsSilentAuditor = false;
         }
 
+        // Toolbar por rol: el candidato (participante) NO comparte pantalla ni
+        // gestiona participantes; el supervisor (moderador) tiene todo.
+        const toolbarButtons = isModerator
+          ? ["microphone", "camera", "desktop", "chat", "tileview", "participants-pane", "hangup"]
+          : ["microphone", "camera", "chat", "hangup"];
+
         const api = new window.JitsiMeetExternalAPI(env.JITSI_DOMAIN, {
           roomName,
           parentNode: containerRef.current,
@@ -67,15 +73,7 @@ export default function useJitsiIframe({
           jwt,
           configOverwrite,
           interfaceConfigOverwrite: {
-            TOOLBAR_BUTTONS: [
-              "microphone",
-              "camera",
-              "hangup",
-              "desktop",
-              "chat",
-              "tileview",
-              "participants-pane",
-            ],
+            TOOLBAR_BUTTONS: toolbarButtons,
             SHOW_JITSI_WATERMARK: false,
             SHOW_WATERMARK_FOR_GUESTS: false,
             DISABLE_JOIN_LEAVE_NOTIFICATIONS: false,

@@ -194,6 +194,17 @@ export function useProctoring({ entrevistaId, participanteId, sessionId, enabled
         if (cancelled) return;
         const msg = err instanceof Error ? err.message : "Error desconocido";
         setStatus("error");
+        // Entró SIN cámara funcional → no bloqueamos, pero queda como alerta.
+        void proctoringService
+          .reportJitsiEvent({
+            entrevista_id: entrevistaIdStr,
+            participante_id: participanteIdStr,
+            tipo_evento: "camara_no_disponible",
+            valor: "true",
+            timestamp: nowIso(),
+            session_id: sessionId,
+          })
+          .catch(() => undefined);
         if (msg.includes("NotAllowed") || msg.includes("Permission denied")) {
           setLastMessage("❌ Acceso a cámara denegado — habilita los permisos en el navegador.");
         } else if (msg.includes("NotFound") || msg.includes("DevicesNotFound")) {

@@ -319,6 +319,7 @@ export const ALERTAS = {
     posible_celular_o_lectura: "Posible lectura / celular",
     cambio_ventana: "Cambio de pestaña",
     camara_apagada: "Cámara apagada",
+    camara_no_disponible: "Sin cámara disponible",
     pantalla_compartida: "Pantalla compartida",
     participante_salio: "Participante se fue",
   } as const,
