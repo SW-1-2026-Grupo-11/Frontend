@@ -218,7 +218,7 @@ export default function SesionDetallePage() {
   }
 
   async function handleGenerarReporteIA() {
-    if (!entrevistaId) return;
+    if (!entrevistaId || !sesionDetalle) return;
     const integridad = calcularIntegridad(alertas);
     try {
       const reporte = await generarIAMutation.mutateAsync(sesionDetalle.id);
