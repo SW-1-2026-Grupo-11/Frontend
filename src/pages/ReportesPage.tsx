@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { MainLayout } from "@/shared/components/layout";
 import { useCurrentUser, useLogout } from "@/features/auth";
-import { ReportesTable, ReporteDetalleModal, useGetReportes, useGenerarReporteIA } from "@/features/reportes";
+import { ReportesTable, ReporteDetalleModal, useGetReportes, useGenerarReporte } from "@/features/reportes";
 import { useGetAlertas } from "@/features/alertas";
-import { useGetEntrevistas } from "@/features/interviews";
+import { useGetSesiones } from "@/features/sesiones";
 import type { Reporte } from "@/features/reportes";
-import type { Entrevista } from "@/features/interviews";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -53,11 +52,11 @@ export default function ReportesPage() {
   const logout = useLogout();
   const { data: reportes, isLoading: loadingReportes, isError: errorReportes } = useGetReportes();
   const { data: alertas } = useGetAlertas();
-  const { data: entrevistas = [] } = useGetEntrevistas();
-  const generarMutation = useGenerarReporteIA();
+  const { data: sesiones = [] } = useGetSesiones();
+  const generarMutation = useGenerarReporte();
 
   const [selectedReporte, setSelectedReporte] = useState<Reporte | undefined>(undefined);
-  const [selectedEntrevistaId, setSelectedEntrevistaId] = useState<number | "">("");
+  const [selectedSesionId, setSelectedSesionId] = useState<number | "">("");
   const [reporteGenerado, setReporteGenerado] = useState<Reporte | null>(null);
   const [errorIA, setErrorIA] = useState<string | null>(null);
 
@@ -69,20 +68,19 @@ export default function ReportesPage() {
   };
 
   const handleGenerar = async () => {
-    if (!selectedEntrevistaId) return;
+    if (!selectedSesionId) return;
     setErrorIA(null);
     setReporteGenerado(null);
     try {
-      const r = await generarMutation.mutateAsync(Number(selectedEntrevistaId));
+      const r = await generarMutation.mutateAsync(Number(selectedSesionId));
       setReporteGenerado(r);
     } catch {
       setErrorIA("No se pudo generar el reporte. Intenta de nuevo.");
     }
   };
 
-  const entrevistasFiltradas = (entrevistas as Entrevista[]).filter(
-    (e) => e.estado !== "borrador" && e.estado !== "cancelada",
-  );
+  // Se genera el informe de una SESIÓN (1 candidato = 1 sesión = 1 informe).
+  const sesionesFiltradas = sesiones.filter((s) => s.estado === "finalizada");
 
   return (
     <MainLayout userName={user?.username} onLogout={logout}>
@@ -130,12 +128,12 @@ export default function ReportesPage() {
                 color: "var(--color-text-muted)",
                 marginBottom: "var(--space-xs)",
               }}>
-                Selecciona una entrevista
+                Selecciona una sesión finalizada
               </label>
               <select
-                value={selectedEntrevistaId}
+                value={selectedSesionId}
                 onChange={(e) => {
-                  setSelectedEntrevistaId(e.target.value === "" ? "" : Number(e.target.value));
+                  setSelectedSesionId(e.target.value === "" ? "" : Number(e.target.value));
                   setReporteGenerado(null);
                   setErrorIA(null);
                 }}
@@ -151,19 +149,21 @@ export default function ReportesPage() {
                   cursor: "pointer",
                 }}
               >
-                <option value="">— Elige una entrevista —</option>
-                {entrevistasFiltradas.map((e) => (
-                  <option key={e.id} value={e.id}>{e.titulo}</option>
+                <option value="">— Elige una sesión —</option>
+                {sesionesFiltradas.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    Sesión #{s.id} · {s.estado}
+                  </option>
                 ))}
               </select>
             </div>
 
             <button
               onClick={() => void handleGenerar()}
-              disabled={!selectedEntrevistaId || generarMutation.isPending}
+              disabled={!selectedSesionId || generarMutation.isPending}
               style={{
                 padding: "var(--space-sm) var(--space-lg)",
-                backgroundColor: !selectedEntrevistaId || generarMutation.isPending
+                backgroundColor: !selectedSesionId || generarMutation.isPending
                   ? "var(--color-border)"
                   : "var(--color-primary)",
                 color: "#fff",
@@ -172,7 +172,7 @@ export default function ReportesPage() {
                 fontSize: "var(--font-size-sm)",
                 fontWeight: "var(--font-weight-semibold)",
                 fontFamily: "inherit",
-                cursor: !selectedEntrevistaId || generarMutation.isPending ? "not-allowed" : "pointer",
+                cursor: !selectedSesionId || generarMutation.isPending ? "not-allowed" : "pointer",
                 whiteSpace: "nowrap",
                 minWidth: 200,
                 transition: "background-color 0.15s",

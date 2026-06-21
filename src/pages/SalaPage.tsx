@@ -638,15 +638,9 @@ export default function SalaPage() {
     );
   }
 
-  function handleGenerarReporte(p: ParticipantData) {
+  function handleGenerarReporte(_p: ParticipantData) {
     if (!sesionDetalle) return;
-    generarReporte.mutate({
-      entrevista_id: String(sesionDetalle.entrevista),
-      participante_id: String(p.id),
-      puntaje_total: p.integridad,
-      total_alertas: p.alertCount,
-      nivel_riesgo: p.integridad < 70 ? "alto" : p.integridad < 85 ? "medio" : "bajo",
-    });
+    generarReporte.mutate(sesionId);
   }
 
   if (isLoading || !sesionDetalle) {

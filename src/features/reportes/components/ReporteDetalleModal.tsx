@@ -1,6 +1,8 @@
-import type { Reporte, NivelRiesgo } from "../types";
+import { useState } from "react";
+import type { DecisionReporte, Reporte, NivelRiesgo } from "../types";
 import type { Alerta, Severidad } from "@/features/alertas";
-import { alertasForReporte, getEntrevistaId, cleanResumenGeneral } from "../utils/reporteUtils";
+import { alertasForReporte, getEntrevistaId } from "../utils/reporteUtils";
+import { useDecidirReporte } from "../hooks/useGenerarReporte";
 
 type Props = {
   reporte: Reporte;
@@ -9,6 +11,12 @@ type Props = {
 };
 
 type BadgeVariant = "success" | "warning" | "danger" | "neutral";
+
+const DECISION_LABEL: Record<DecisionReporte, string> = {
+  pendiente: "Pendiente de decisión",
+  apto: "Apto",
+  no_apto: "No apto",
+};
 
 function riesgoVariant(nivel: NivelRiesgo | null): BadgeVariant {
   if (nivel === "bajo") return "success";
@@ -70,6 +78,14 @@ export default function ReporteDetalleModal({ reporte, alertas = [], onClose }: 
   const entrevistaId = getEntrevistaId(reporte);
   const alertasFiltradas = alertasForReporte(alertas, reporte);
 
+  const decidir = useDecidirReporte();
+  const [obs, setObs] = useState(reporte.observaciones_evaluador ?? "");
+  const yaFirmado = reporte.decision !== "pendiente";
+
+  const handleDecidir = (decision: "apto" | "no_apto") => {
+    decidir.mutate({ id: reporte.id, decision, observaciones: obs || undefined });
+  };
+
   return (
     <div
       style={{
@@ -99,7 +115,7 @@ export default function ReporteDetalleModal({ reporte, alertas = [], onClose }: 
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: "var(--space-md)" }}>
             <h2 style={{ fontSize: "var(--font-size-lg)", fontWeight: "var(--font-weight-bold)", color: "var(--color-text)" }}>
-              Reporte #{reporte.id}
+              {reporte.candidato_nombre ?? `Informe #${reporte.id}`}
             </h2>
             <span style={{
               fontSize: "var(--font-size-sm)", fontWeight: "bold",
@@ -112,9 +128,12 @@ export default function ReporteDetalleModal({ reporte, alertas = [], onClose }: 
             }}>
               Riesgo {reporte.nivel_riesgo ?? "—"}
             </span>
+            <span style={{ fontSize: "var(--font-size-sm)", fontWeight: "bold", color: "var(--color-text)" }}>
+              Nota: {reporte.nota != null ? Number(reporte.nota).toFixed(0) : "sin calificar"}
+            </span>
             {entrevistaId && (
               <span style={{ fontSize: "var(--font-size-sm)", color: "var(--color-text-muted)" }}>
-                Entrevista #{entrevistaId}
+                Convocatoria #{entrevistaId}
               </span>
             )}
           </div>
@@ -136,7 +155,7 @@ export default function ReporteDetalleModal({ reporte, alertas = [], onClose }: 
             })}
           </div>
 
-          <Section title="Resumen general" content={cleanResumenGeneral(reporte.resumen_general)} />
+          <Section title="Resumen general" content={reporte.resumen_general} />
           <Section title="Resumen del participante" content={reporte.resumen_participante} />
           <Section title="Recomendaciones" content={reporte.recomendaciones} />
 
@@ -201,6 +220,96 @@ export default function ReporteDetalleModal({ reporte, alertas = [], onClose }: 
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+          </div>
+          {/* ── Decisión del evaluador ("la IA asiste, el humano decide") ── */}
+          <div style={{
+            marginTop: "var(--space-lg)",
+            paddingTop: "var(--space-lg)",
+            borderTop: "1px solid var(--color-border)",
+          }}>
+            <h3 style={{
+              fontSize: "var(--font-size-sm)",
+              fontWeight: "var(--font-weight-bold)",
+              color: "var(--color-text-muted)",
+              textTransform: "uppercase",
+              letterSpacing: "0.05em",
+              marginBottom: "var(--space-sm)",
+            }}>
+              Decisión del evaluador
+            </h3>
+
+            {yaFirmado ? (
+              <div style={{
+                display: "flex", flexDirection: "column", gap: 4,
+                background: "var(--color-surface-hover)",
+                borderRadius: "var(--radius-md)",
+                padding: "var(--space-md)",
+              }}>
+                <span style={{
+                  fontSize: "var(--font-size-base)", fontWeight: "bold",
+                  color: reporte.decision === "apto" ? "var(--color-success)" : "var(--color-danger)",
+                }}>
+                  {DECISION_LABEL[reporte.decision]}
+                </span>
+                <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
+                  Firmado por {reporte.firmado_por_nombre ?? "—"}
+                  {reporte.fecha_firma ? ` · ${formatDate(reporte.fecha_firma)}` : ""}
+                </span>
+                {reporte.observaciones_evaluador && (
+                  <span style={{ fontSize: "var(--font-size-sm)", color: "var(--color-text)", marginTop: 4 }}>
+                    {reporte.observaciones_evaluador}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
+                <textarea
+                  value={obs}
+                  onChange={(e) => setObs(e.target.value)}
+                  placeholder="Observaciones del evaluador (opcional)…"
+                  rows={2}
+                  style={{
+                    width: "100%",
+                    backgroundColor: "var(--color-background)",
+                    color: "var(--color-text)",
+                    border: "1px solid var(--color-border)",
+                    borderRadius: "var(--radius-md)",
+                    padding: "var(--space-sm)",
+                    fontSize: "var(--font-size-sm)",
+                    fontFamily: "inherit",
+                    resize: "vertical",
+                  }}
+                />
+                <div style={{ display: "flex", gap: "var(--space-sm)" }}>
+                  <button
+                    onClick={() => handleDecidir("apto")}
+                    disabled={decidir.isPending}
+                    style={{
+                      flex: 1, padding: "var(--space-sm)",
+                      background: "var(--color-success)", color: "#fff",
+                      border: "none", borderRadius: "var(--radius-md)",
+                      fontSize: "var(--font-size-sm)", fontWeight: "bold",
+                      fontFamily: "inherit", cursor: decidir.isPending ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    ✓ Apto
+                  </button>
+                  <button
+                    onClick={() => handleDecidir("no_apto")}
+                    disabled={decidir.isPending}
+                    style={{
+                      flex: 1, padding: "var(--space-sm)",
+                      background: "var(--color-danger)", color: "#fff",
+                      border: "none", borderRadius: "var(--radius-md)",
+                      fontSize: "var(--font-size-sm)", fontWeight: "bold",
+                      fontFamily: "inherit", cursor: decidir.isPending ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    ✕ No apto
+                  </button>
+                </div>
               </div>
             )}
           </div>
