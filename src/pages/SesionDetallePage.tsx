@@ -210,13 +210,7 @@ export default function SesionDetallePage() {
     const key = String(inv.id);
     setGenerandoReporte((prev) => ({ ...prev, [key]: true }));
     try {
-      const reporte = await generarReporteMutation.mutateAsync({
-        entrevista_id: String(entrevistaId),
-        participante_id: String(inv.id),
-        puntaje_total: integridad,
-        total_alertas: partAlertas.length,
-        nivel_riesgo: integridad < 70 ? "alto" : integridad < 85 ? "medio" : "bajo",
-      });
+      const reporte = await generarReporteMutation.mutateAsync(sesionDetalle.id);
       setReporteModal({ open: true, reporte, integridad });
     } finally {
       setGenerandoReporte((prev) => ({ ...prev, [key]: false }));
@@ -227,7 +221,7 @@ export default function SesionDetallePage() {
     if (!entrevistaId) return;
     const integridad = calcularIntegridad(alertas);
     try {
-      const reporte = await generarIAMutation.mutateAsync(entrevistaId);
+      const reporte = await generarIAMutation.mutateAsync(sesionDetalle.id);
       setReporteModal({ open: true, reporte, integridad });
     } catch {
       // error silenciado — mutation state lo expone

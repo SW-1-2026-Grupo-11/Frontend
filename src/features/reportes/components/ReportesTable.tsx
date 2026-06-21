@@ -2,7 +2,19 @@ import { Fragment, useState } from "react";
 import { Badge, Spinner } from "@/shared/components/ui";
 import type { Alerta } from "@/features/alertas";
 import type { Reporte, NivelRiesgo } from "../types";
-import { alertasForReporte, getEntrevistaId, cleanResumenGeneral } from "../utils/reporteUtils";
+import { alertasForReporte, getEntrevistaId } from "../utils/reporteUtils";
+
+const DECISION_LABEL: Record<string, string> = {
+  pendiente: "Pendiente",
+  apto: "Apto",
+  no_apto: "No apto",
+};
+
+function decisionVariant(d: string): BadgeVariant {
+  if (d === "apto") return "success";
+  if (d === "no_apto") return "danger";
+  return "neutral";
+}
 
 type Props = {
   reportes: Reporte[] | undefined;
@@ -157,9 +169,10 @@ export default function ReportesTable({ reportes, alertas = [], isLoading, isErr
             <tr style={{ backgroundColor: "var(--color-surface-hover)" }}>
               <th style={thStyle} />
               <th style={thStyle}>#</th>
-              <th style={thStyle}>Resumen general</th>
-              <th style={thStyle}>Entrevista</th>
+              <th style={thStyle}>Candidato</th>
+              <th style={thStyle}>Convocatoria</th>
               <th style={thStyle}>Nivel de riesgo</th>
+              <th style={thStyle}>Decisión</th>
               <th style={thStyle}>Alertas</th>
               <th style={thStyle}>Fecha</th>
               <th style={thStyle}>Acciones</th>
@@ -168,21 +181,21 @@ export default function ReportesTable({ reportes, alertas = [], isLoading, isErr
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={8} style={{ ...tdStyle, textAlign: "center", padding: "var(--space-xl)" }}>
+                <td colSpan={9} style={{ ...tdStyle, textAlign: "center", padding: "var(--space-xl)" }}>
                   <Spinner size="md" />
                 </td>
               </tr>
             )}
             {isError && (
               <tr>
-                <td colSpan={8} style={{ ...tdStyle, textAlign: "center", color: "var(--color-danger)", padding: "var(--space-xl)" }}>
+                <td colSpan={9} style={{ ...tdStyle, textAlign: "center", color: "var(--color-danger)", padding: "var(--space-xl)" }}>
                   Error al cargar los reportes
                 </td>
               </tr>
             )}
             {!isLoading && !isError && (!reportes || reportes.length === 0) && (
               <tr>
-                <td colSpan={8} style={{ ...tdStyle, textAlign: "center", color: "var(--color-text-muted)", padding: "var(--space-xl)" }}>
+                <td colSpan={9} style={{ ...tdStyle, textAlign: "center", color: "var(--color-text-muted)", padding: "var(--space-xl)" }}>
                   No hay reportes registrados
                 </td>
               </tr>
@@ -215,7 +228,7 @@ export default function ReportesTable({ reportes, alertas = [], isLoading, isErr
                       </button>
                     </td>
                     <td style={tdStyle}>{r.id}</td>
-                    <td style={{ ...tdStyle, maxWidth: 280 }}>
+                    <td style={{ ...tdStyle, maxWidth: 220 }}>
                       <span
                         style={{
                           display: "block",
@@ -223,15 +236,20 @@ export default function ReportesTable({ reportes, alertas = [], isLoading, isErr
                           textOverflow: "ellipsis",
                           whiteSpace: "nowrap",
                         }}
-                        title={cleanResumenGeneral(r.resumen_general)}
+                        title={r.candidato_nombre ?? undefined}
                       >
-                        {cleanResumenGeneral(r.resumen_general)}
+                        {r.candidato_nombre ?? "—"}
                       </span>
                     </td>
                     <td style={tdStyle}>{entrevistaId ? `#${entrevistaId}` : "—"}</td>
                     <td style={tdStyle}>
                       <Badge variant={riesgoVariant(r.nivel_riesgo)}>
                         {riesgoLabel(r.nivel_riesgo)}
+                      </Badge>
+                    </td>
+                    <td style={tdStyle}>
+                      <Badge variant={decisionVariant(r.decision)}>
+                        {DECISION_LABEL[r.decision] ?? r.decision}
                       </Badge>
                     </td>
                     <td style={tdStyle}>
@@ -266,7 +284,7 @@ export default function ReportesTable({ reportes, alertas = [], isLoading, isErr
                   </tr>
                   {isExpanded && (
                     <tr>
-                      <td colSpan={8} style={{ padding: "var(--space-md) var(--space-lg)", backgroundColor: "var(--color-surface-hover)" }}>
+                      <td colSpan={9} style={{ padding: "var(--space-md) var(--space-lg)", backgroundColor: "var(--color-surface-hover)" }}>
                         <div style={{ marginBottom: "var(--space-sm)", fontSize: "var(--font-size-sm)", fontWeight: "bold", color: "var(--color-text-muted)" }}>
                           Alertas de seguridad — Entrevista {entrevistaId ? `#${entrevistaId}` : "sin asignar"}
                         </div>
