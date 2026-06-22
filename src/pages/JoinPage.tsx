@@ -207,12 +207,16 @@ export default function JoinPage() {
   const actualizarObsMutation = useActualizarObservaciones();
   const finalizarCandidato = useFinalizarCandidato();
 
-  // ── Proctoring (solo candidatos, se activa cuando entran a la sala) ──
+  // ── Proctoring (solo candidatos) ──
+  // Se activa MIENTRAS rinde la prueba (no depende de entrar a Jitsi): apenas la
+  // sesión carga (`rendir`) y está en la sala, la IA empieza a vigilar. Así
+  // funciona aunque el join de Jitsi falle, y la cámara la toma el proctoring
+  // sin pelear con Jitsi.
   const proctoring = useProctoring({
     entrevistaId: decoded?.entrevista_id ?? 0,
     participanteId: decoded?.invitado_id ?? 0,
     sessionId: sesion ? String(sesion.id) : undefined,
-    enabled: jitsiJoined && !decoded?.moderator,
+    enabled: fase === "sala" && !!rendir && !decoded?.moderator,
   });
 
   // (El invitado se marca "aceptado" automáticamente dentro del endpoint `ingresar`.)
