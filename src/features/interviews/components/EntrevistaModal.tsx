@@ -3,11 +3,14 @@ import { createPortal } from "react-dom";
 import { Button, Input } from "@/shared/components/ui";
 import { ENTREVISTAS } from "@/config/constants";
 import { useCurrentUser } from "@/features/auth";
-import { useCreateEntrevista, useUpdateEntrevista } from "../hooks/useEntrevistas";
+import {
+  useCancelarEntrevista,
+  useCreateEntrevista,
+  useUpdateEntrevista,
+} from "../hooks/useEntrevistas";
 import type {
   CreateEntrevistaDto,
   Entrevista,
-  EstadoEntrevista,
   UpdateEntrevistaDto,
 } from "../types";
 
@@ -19,7 +22,6 @@ type EntrevistaModalProps = {
 type FormState = {
   titulo: string;
   descripcion: string;
-  estado: EstadoEntrevista;
   fecha_programada: string;
 };
 
@@ -62,11 +64,11 @@ export default function EntrevistaModal({ onClose, entrevista }: EntrevistaModal
   const { data: currentUser } = useCurrentUser();
   const createEntrevista = useCreateEntrevista();
   const updateEntrevista = useUpdateEntrevista();
+  const cancelar = useCancelarEntrevista();
 
   const [form, setForm] = useState<FormState>({
     titulo: entrevista?.titulo ?? "",
     descripcion: entrevista?.descripcion ?? "",
-    estado: entrevista?.estado ?? "borrador",
     fecha_programada: entrevista?.fecha_programada ?? "",
   });
   const [formErrors, setFormErrors] = useState<FormErrors>({});
@@ -86,10 +88,11 @@ export default function EntrevistaModal({ onClose, entrevista }: EntrevistaModal
       return;
     }
 
+    // El `estado` ya NO se setea a mano: es derivado (o cancelar). Solo se editan
+    // los datos de la convocatoria.
     const base = {
       titulo: form.titulo,
       descripcion: form.descripcion,
-      estado: form.estado,
       fecha_programada: form.fecha_programada || null,
     };
 
@@ -180,24 +183,51 @@ export default function EntrevistaModal({ onClose, entrevista }: EntrevistaModal
             onChange={(e) => handleChange("titulo", e.target.value)}
           />
 
-          {/* Estado */}
-          <div style={fieldStyle}>
-            <label htmlFor="estado" style={labelStyle}>
-              {ENTREVISTAS.LABEL_ESTADO}
-            </label>
-            <select
-              id="estado"
-              value={form.estado}
-              onChange={(e) => handleChange("estado", e.target.value as EstadoEntrevista)}
-              style={selectStyle}
-            >
-              {ENTREVISTAS.ESTADOS.map((s) => (
-                <option key={s} value={s}>
-                  {ENTREVISTAS.ESTADO_LABELS[s]}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Estado: derivado (read-only) + acción Cancelar. Ya NO es un selector
+              libre — el estado se calcula solo según la fecha; lo único manual es
+              cancelar la convocatoria. */}
+          {isEdit && entrevista && (
+            <div style={fieldStyle}>
+              <label style={labelStyle}>{ENTREVISTAS.LABEL_ESTADO}</label>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "var(--space-sm)",
+                  flexWrap: "wrap",
+                }}
+              >
+                <span
+                  style={{
+                    padding: "4px 12px",
+                    borderRadius: "var(--radius-full)",
+                    backgroundColor: "rgba(255,255,255,0.06)",
+                    border: "1px solid var(--color-border)",
+                    fontSize: "var(--font-size-sm)",
+                    fontWeight: "var(--font-weight-medium)",
+                    color: "var(--color-text)",
+                  }}
+                >
+                  {ENTREVISTAS.ESTADO_LABELS[entrevista.estado_efectivo]}
+                </span>
+                {entrevista.estado_efectivo !== "cancelada" &&
+                  entrevista.estado_efectivo !== "finalizada" && (
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      type="button"
+                      loading={cancelar.isPending}
+                      onClick={() => cancelar.mutate(entrevista.id, { onSuccess: onClose })}
+                    >
+                      Cancelar convocatoria
+                    </Button>
+                  )}
+              </div>
+              <span style={{ fontSize: "var(--font-size-sm)", color: "var(--color-text-muted)" }}>
+                El estado se calcula automáticamente según la fecha; solo podés cancelarla.
+              </span>
+            </div>
+          )}
 
           {/* Fecha programada */}
           <div style={fieldStyle}>

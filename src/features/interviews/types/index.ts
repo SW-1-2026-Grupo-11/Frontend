@@ -5,27 +5,17 @@ export type EstadoEntrevista =
   | "finalizada"
   | "cancelada";
 
-export type EstadoAsignacion = "asignada" | "inactiva" | "cancelada";
-
 export type Entrevista = {
   id: number;
   titulo: string;
   descripcion: string;
   creada_por: number;
-  estado: EstadoEntrevista;
+  prueba: number | null;
+  prueba_nombre?: string | null;
+  estado: EstadoEntrevista; // crudo (solo manual: borrador/cancelada)
+  estado_efectivo: EstadoEntrevista; // derivado del tiempo — lo que se MUESTRA
   fecha_programada: string | null;
   fecha_creacion: string;
-  fecha_actualizacion: string;
-};
-
-export type PruebaEntrevista = {
-  id: number;
-  entrevista: number;
-  prueba: number;
-  asignada_por: number;
-  estado: EstadoAsignacion;
-  observaciones: string;
-  fecha_asignacion: string;
   fecha_actualizacion: string;
 };
 
@@ -39,13 +29,6 @@ export type CreateEntrevistaDto = {
 
 export type UpdateEntrevistaDto = Partial<Omit<CreateEntrevistaDto, "creada_por">>;
 
-export type AsignarPruebaDto = {
-  entrevista: number;
-  prueba: number;
-  asignada_por: number;
-  observaciones?: string;
-};
-
 export type ProgramarInvitadoDto = {
   nombre: string;
   email: string;
@@ -55,8 +38,10 @@ export type ProgramarEntrevistaDto = {
   titulo: string;
   descripcion?: string;
   evaluador_id: number;
+  prueba_id?: number;
   fecha_programada: string;
-  duracion_minutos: number;
+  // OPCIONAL: vacío = hereda la duración de la prueba (fuente de verdad).
+  duracion_minutos?: number | null;
   invitados: ProgramarInvitadoDto[];
 };
 

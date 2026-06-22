@@ -2,17 +2,18 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearch } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useJwtDecode } from "@/shared/hooks/useJwtDecode";
-import {
-  useActualizarObservaciones,
-  useMarcarAceptado,
+import { useActualizarObservaciones, useFinalizarCandidato, RendirPrueba } from "@/features/sesiones";
+import type {
+  Sesion,
+  SesionDetalle,
+  InvitadoSesion,
+  PruebaCandidato,
 } from "@/features/sesiones";
-import type { Sesion, SesionDetalle, InvitadoSesion } from "@/features/sesiones";
 import env from "@/config/env";
-import { useProctoring, proctoringService } from "@/features/proctoring";
+import { useProctoring } from "@/features/proctoring";
 import { JitsiRoom } from "@/features/supervision";
 import type { JitsiRoomHandle } from "@/features/supervision";
 import Button from "@/shared/components/ui/Button";
-import { PROCTORING } from "@/config/constants";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -48,8 +49,9 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function JoinPage() {
   // ── URL search params ──
-  const rawSearch = useSearch({ strict: false }) as { token?: string };
+  const rawSearch = useSearch({ strict: false }) as { token?: string; watch?: string };
   const token = rawSearch.token ?? "";
+  const watchParam = rawSearch.watch ?? "";
 
   // ── JWT decode ──
   const decoded = useJwtDecode(token || null);
@@ -70,10 +72,14 @@ export default function JoinPage() {
   const [agregandoInvitado, setAgregandoInvitado] = useState(false);
   const [mensajeAgregar, setMensajeAgregar] = useState<string | null>(null);
   const [invitadosExtra, setInvitadosExtra] = useState<InvitadoSesion[]>([]);
+  // A quién supervisa el moderador. Viene del ?watch= o se elige en pantalla.
+  // El supervisor SIEMPRE entra a la sala de un candidato (inv-{id}); sin esto
+  // caería en una sala general sin JWT y Jitsi pediría login (ENABLE_GUESTS=0).
+  const [watchLocal, setWatchLocal] = useState("");
+  const watchInvitadoId = watchParam || watchLocal;
 
   // ── Refs ──
   const jitsiRef = useRef<JitsiRoomHandle>(null);
-  const marcarFiredRef = useRef(false);
 
   // ── Fetch público con el JWT del token de invitado/supervisor ──
   const fetchWithInvitadoToken = useCallback(
@@ -91,7 +97,8 @@ export default function JoinPage() {
   );
 
   // ── Queries usando el token de la URL, no el de localStorage ──
-  const { data: sesion } = useQuery<Sesion | undefined>({
+  // Supervisor: consulta la sesión del candidato (puede no existir hasta que entra).
+  const { data: sesionSupervisor } = useQuery<Sesion | undefined>({
     queryKey: ["sesion-publica", decoded?.entrevista_id, token],
     queryFn: async () => {
       const raw = await fetchWithInvitadoToken<Sesion[] | { results: Sesion[] }>(
@@ -100,9 +107,87 @@ export default function JoinPage() {
       const list = Array.isArray(raw) ? raw : (raw as { results: Sesion[] }).results ?? [];
       return list[0];
     },
-    enabled: !!decoded?.entrevista_id && !!token,
+    enabled: !!decoded?.entrevista_id && !!token && !!decoded?.moderator,
     retry: false,
   });
+
+  // Candidato: UNA sola llamada crea la sesión Y trae la prueba (Capa 3c).
+  // POST /sesiones/rendir/ {token} -> { sesion, prueba }. Fetch plano + estado
+  // local: sin React Query, sin 2 pasos acoplados, nada que se desincronice.
+  const [rendir, setRendir] = useState<{ sesion: Sesion; prueba: PruebaCandidato | null } | null>(
+    null,
+  );
+  const [rendirError, setRendirError] = useState<string | null>(null);
+  const rendirFiredRef = useRef(false);
+
+  const cargarRendir = useCallback(() => {
+    if (!token) return;
+    setRendirError(null);
+    setRendir(null);
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), 12000);
+    fetch(`${env.API_URL}/sesiones/rendir/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+      signal: ctrl.signal,
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          let detail = `Error ${res.status}`;
+          try {
+            const e = (await res.json()) as { detail?: string };
+            if (e?.detail) detail = e.detail;
+          } catch {
+            /* sin cuerpo JSON */
+          }
+          throw new Error(detail);
+        }
+        return (await res.json()) as { sesion: Sesion; prueba: PruebaCandidato | null };
+      })
+      .then((data) => setRendir(data))
+      .catch((err: unknown) => {
+        const msg =
+          err instanceof DOMException && err.name === "AbortError"
+            ? "El servidor no respondió (timeout 12s). Avisa al evaluador."
+            : err instanceof Error
+              ? err.message
+              : "No se pudo cargar tu prueba.";
+        setRendirError(msg);
+      })
+      .finally(() => clearTimeout(timeout));
+  }, [token]);
+
+  useEffect(() => {
+    if (rendirFiredRef.current || !decoded || decoded.moderator || !token) return;
+    rendirFiredRef.current = true;
+    cargarRendir();
+  }, [decoded, token, cargarRendir]);
+
+  // JWT de Jitsi: SOLO si el dominio es propio (la pública meet.jit.si no lo usa
+  // y rechazaría un token nuestro). Candidato → su sala; supervisor → la sala
+  // del candidato que mira (?watch=).
+  const selfHostedJitsi = env.JITSI_DOMAIN !== "meet.jit.si";
+  const [jitsiJwt, setJitsiJwt] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    if (!selfHostedJitsi || !decoded || !token) return;
+    if (decoded.moderator && !watchInvitadoId) return;
+    const body: { token: string; watch?: string } = { token };
+    if (decoded.moderator) body.watch = watchInvitadoId;
+    fetch(`${env.API_URL}/sesiones/jitsi-token/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.jwt) setJitsiJwt(d.jwt as string);
+      })
+      .catch(() => undefined);
+  }, [selfHostedJitsi, decoded, token, watchInvitadoId]);
+
+  // Sesión efectiva: candidato = la de /rendir/; supervisor = la consultada.
+  const sesion = decoded?.moderator ? sesionSupervisor : rendir?.sesion ?? undefined;
 
   const { data: sesionDetalle } = useQuery<SesionDetalle>({
     queryKey: ["sesion-detalle-publica", sesion?.id, token],
@@ -119,8 +204,8 @@ export default function JoinPage() {
   });
 
   // ── Mutaciones ──
-  const marcarAceptadoMutation = useMarcarAceptado();
   const actualizarObsMutation = useActualizarObservaciones();
+  const finalizarCandidato = useFinalizarCandidato();
 
   // ── Proctoring (solo candidatos, se activa cuando entran a la sala) ──
   const proctoring = useProctoring({
@@ -130,43 +215,34 @@ export default function JoinPage() {
     enabled: jitsiJoined && !decoded?.moderator,
   });
 
-  // ── Marcar invitado como aceptado (una sola vez al cargar) ──
-  useEffect(() => {
-    if (marcarFiredRef.current || !decoded || decoded.moderator || decoded.invitado_id === null) return;
-    marcarFiredRef.current = true;
-    marcarAceptadoMutation.mutate({ invitadoId: decoded.invitado_id, token });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [decoded]);
+  // (El invitado se marca "aceptado" automáticamente dentro del endpoint `ingresar`.)
 
   // ── Timer de sesión ──
+  // El candidato ve una CUENTA REGRESIVA hasta su deadline (auto-entrega en 0);
+  // el supervisor ve el tiempo transcurrido. `nowMs` tickea cada segundo.
+  const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
     if (fase !== "sala") return;
-    const id = setInterval(() => setTimerSeconds((s) => s + 1), 1000);
+    const id = setInterval(() => {
+      setNowMs(Date.now());
+      setTimerSeconds((s) => s + 1);
+    }, 1000);
     return () => clearInterval(id);
   }, [fase]);
 
-  // ── Captura de frames Jitsi para IA (candidatos únicamente) ──
-  useEffect(() => {
-    if (!jitsiJoined || decoded?.moderator || !decoded) return;
+  // Deadline del candidato (la sesión de /rendir/ trae `deadline`). El supervisor
+  // no tiene countdown propio.
+  const deadlineMs =
+    !decoded?.moderator && rendir?.sesion?.deadline
+      ? new Date(rendir.sesion.deadline).getTime()
+      : null;
+  const remainingSecs =
+    deadlineMs !== null ? Math.max(0, Math.round((deadlineMs - nowMs) / 1000)) : null;
+  const tiempoPorAcabarse = remainingSecs !== null && remainingSecs <= 120; // aviso ≤ 2 min
 
-    const id = setInterval(() => {
-      jitsiRef.current
-        ?.captureScreenshot()
-        .then((data) => {
-          if (!data?.dataURL) return;
-          void proctoringService.analyzeFrame({
-            entrevista_id: String(decoded.entrevista_id),
-            participante_id: String(decoded.invitado_id ?? 0),
-            frame: data.dataURL,
-            timestamp: new Date().toISOString(),
-            session_id: sesion ? String(sesion.id) : undefined,
-          });
-        })
-        .catch(() => undefined);
-    }, PROCTORING.FRAME_INTERVAL_MS);
-
-    return () => clearInterval(id);
-  }, [jitsiJoined, decoded, sesion]);
+  // Proctoring desacoplado: la IA usa la cámara directa (useProctoring →
+  // getUserMedia), NO screenshots de Jitsi → siempre analiza al candidato,
+  // sin importar quién sea el "video grande" ni si se comparte pantalla.
 
   // ── Inicializar observaciones desde el detalle (solo la primera vez que llega) ──
   const obsInitRef = useRef(false);
@@ -176,6 +252,14 @@ export default function JoinPage() {
     setObservaciones(sesionDetalle.observaciones_internas ?? "");
   }, [sesionDetalle]);
 
+  // Si el supervisor no eligió a quién mirar y hay UN solo candidato, lo elige
+  // solo (caso típico: 1 candidato por convocatoria). Con varios, muestra el selector.
+  useEffect(() => {
+    if (!decoded?.moderator || watchInvitadoId) return;
+    const invs = sesionDetalle?.invitados ?? [];
+    if (invs.length === 1) setWatchLocal(String(invs[0].id));
+  }, [decoded, watchInvitadoId, sesionDetalle]);
+
   // ─── Handlers ─────────────────────────────────────────────────────────────
 
   const handleSalir = () => {
@@ -184,6 +268,26 @@ export default function JoinPage() {
     setJitsiJoined(false);
     setTimerSeconds(0);
   };
+
+  const handleReintentarIngreso = () => {
+    cargarRendir();
+  };
+
+  // ── Auto-entrega: al llegar a 0 el countdown, se entrega la prueba sola ──
+  // (el server también rechaza responder pasado el deadline; esto es la comodidad
+  // del front: cierra y saca al candidato sin que tenga que hacer nada).
+  const autoEntregaRef = useRef(false);
+  useEffect(() => {
+    if (autoEntregaRef.current) return;
+    if (remainingSecs === null || remainingSecs > 0) return;
+    const sesionId = rendir?.sesion?.id;
+    if (!sesionId || !token || fase !== "sala") return;
+    autoEntregaRef.current = true;
+    finalizarCandidato.mutate(
+      { sesionId, token },
+      { onSettled: () => handleSalir() },
+    );
+  }, [remainingSecs, rendir, token, fase, finalizarCandidato]);
 
   const handleConferenceJoined = useCallback(() => {
     setJitsiJoined(true);
@@ -387,10 +491,127 @@ export default function JoinPage() {
 
   // ─── Sala de video (full-screen) ─────────────────────────────────────────
 
-  const roomName =
-    sesion?.room_name ??
-    sesionDetalle?.room_name ??
-    `entrevista-${decoded.entrevista_id}`;
+  // 1 SALA POR CANDIDATO (regla del plan): el candidato entra a SU sala (inv-<id>),
+  // nunca compartida. El supervisor entra a la sala del candidato que eligió
+  // (?watch=<invitado_id>); sin elegir, cae en una sala por convocatoria (vacía).
+  const roomName = decoded.moderator
+    ? watchInvitadoId
+      ? `inv-${watchInvitadoId}`
+      : `entrevista-${decoded.entrevista_id}`
+    : `inv-${decoded.invitado_id}`;
+
+  const jitsiEl = (
+    <JitsiRoom
+      ref={jitsiRef}
+      roomName={roomName}
+      displayName={decoded.nombre}
+      email={decoded.email}
+      isModerator={decoded.moderator}
+      jwt={jitsiJwt}
+      onConferenceJoined={handleConferenceJoined}
+      onParticipantJoined={handleParticipantJoined}
+      onParticipantLeft={handleParticipantLeft}
+      onVideoMuteChanged={handleVideoMuteChanged}
+      onScreenShareChanged={handleScreenShareChanged}
+      onReadyToClose={handleReadyToClose}
+    />
+  );
+
+  // El supervisor entra al video SOLO de un candidato puntual (sala inv-{id}).
+  // Si todavía no eligió a quién mirar, mostramos el selector en vez de meterlo
+  // a una sala general sin JWT (que dispararía el login de Jitsi).
+  const supervisorContent =
+    decoded.moderator && !watchInvitadoId ? (
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "var(--space-md)",
+          color: "rgba(255,255,255,0.85)",
+          padding: 24,
+        }}
+      >
+        <span style={{ fontSize: "2rem" }}>👁️</span>
+        <p style={{ margin: 0, fontSize: "var(--font-size-lg)", fontWeight: "var(--font-weight-bold)" }}>
+          Elegí a quién supervisar
+        </p>
+        <p
+          style={{
+            margin: 0,
+            fontSize: "var(--font-size-sm)",
+            color: "rgba(255,255,255,0.5)",
+            textAlign: "center",
+            maxWidth: 360,
+          }}
+        >
+          Cada candidato tiene su propia sala. Elegí uno para entrar a su video.
+        </p>
+        {(() => {
+          const invs = sesionDetalle?.invitados ?? [];
+          if (invs.length === 0) {
+            return (
+              <p
+                style={{
+                  fontSize: "var(--font-size-sm)",
+                  color: "rgba(255,255,255,0.4)",
+                  fontStyle: "italic",
+                }}
+              >
+                Aún no hay candidatos en la sesión.
+              </p>
+            );
+          }
+          return (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "var(--space-sm)",
+                width: "100%",
+                maxWidth: 360,
+              }}
+            >
+              {invs.map((inv) => (
+                <button
+                  key={inv.id}
+                  onClick={() => setWatchLocal(String(inv.id))}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "var(--space-sm)",
+                    padding: "var(--space-md)",
+                    background: "rgba(255,255,255,0.06)",
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    borderRadius: "var(--radius-md)",
+                    color: "#fff",
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    fontSize: "var(--font-size-base)",
+                    textAlign: "left",
+                  }}
+                >
+                  <span style={{ fontWeight: "var(--font-weight-bold)" }}>{inv.nombre}</span>
+                  <span
+                    style={{
+                      marginLeft: "auto",
+                      fontSize: "var(--font-size-xs)",
+                      color: "rgba(255,255,255,0.5)",
+                    }}
+                  >
+                    {inv.estado}
+                  </span>
+                </button>
+              ))}
+            </div>
+          );
+        })()}
+      </div>
+    ) : (
+      jitsiEl
+    );
 
   return (
     <div
@@ -442,18 +663,30 @@ export default function JoinPage() {
           </span>
         </div>
 
-        {/* Centro: timer */}
+        {/* Centro: timer — candidato = cuenta regresiva al deadline; supervisor = transcurrido */}
         <div
+          title={remainingSecs !== null ? "Tiempo restante para entregar" : "Tiempo en sala"}
           style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
             fontSize: "var(--font-size-base)",
             fontWeight: "var(--font-weight-bold)",
-            color: "rgba(255,255,255,0.9)",
+            color: tiempoPorAcabarse ? "#f87171" : "rgba(255,255,255,0.9)",
             fontVariantNumeric: "tabular-nums",
             minWidth: "60px",
             textAlign: "center",
+            transition: "color 0.3s",
           }}
         >
-          {formatSeconds(timerSeconds)}
+          {remainingSecs !== null ? (
+            <>
+              <span>{tiempoPorAcabarse ? "⏰" : "⏱️"}</span>
+              <span>{formatSeconds(remainingSecs)}</span>
+            </>
+          ) : (
+            formatSeconds(timerSeconds)
+          )}
         </div>
 
         {/* Derecha: badge + botones */}
@@ -516,22 +749,87 @@ export default function JoinPage() {
 
       {/* ── Contenido principal: Jitsi + panel lateral ── */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-        {/* Jitsi iframe */}
-        <div style={{ flex: 1, overflow: "hidden" }}>
-          <JitsiRoom
-            ref={jitsiRef}
-            roomName={roomName}
-            displayName={decoded.nombre}
-            email={decoded.email}
-            isModerator={decoded.moderator}
-            onConferenceJoined={handleConferenceJoined}
-            onParticipantJoined={handleParticipantJoined}
-            onParticipantLeft={handleParticipantLeft}
-            onVideoMuteChanged={handleVideoMuteChanged}
-            onScreenShareChanged={handleScreenShareChanged}
-            onReadyToClose={handleReadyToClose}
-          />
-        </div>
+        {/* Candidato: rendir la prueba + cámara chica · Supervisor: video grande */}
+        {!decoded.moderator ? (
+          <>
+            <div style={{ flex: 1, overflow: "hidden", minWidth: 0 }}>
+              {rendir ? (
+                <RendirPrueba
+                  prueba={rendir.prueba}
+                  sesionId={rendir.sesion.id}
+                  token={token}
+                  onFinalizar={handleSalir}
+                />
+              ) : rendirError ? (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "var(--space-sm)",
+                    height: "100%",
+                    padding: 24,
+                    textAlign: "center",
+                    color: "rgba(255,255,255,0.7)",
+                  }}
+                >
+                  <span style={{ fontSize: "2rem" }}>⚠️</span>
+                  <p style={{ margin: 0, fontSize: "var(--font-size-base)", fontWeight: "var(--font-weight-bold)" }}>
+                    No se pudo iniciar tu evaluación
+                  </p>
+                  <p style={{ margin: 0, fontSize: "var(--font-size-sm)", color: "rgba(255,255,255,0.5)" }}>
+                    {rendirError ?? "El enlace puede haber expirado o ser inválido."}
+                  </p>
+                  <p style={{ margin: 0, fontSize: "var(--font-size-xs)", color: "rgba(255,255,255,0.35)" }}>
+                    Recarga la página o contacta al evaluador.
+                  </p>
+                  <button
+                    onClick={handleReintentarIngreso}
+                    style={{
+                      marginTop: 8,
+                      padding: "8px 18px",
+                      background: "var(--color-primary)",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: "var(--radius-md)",
+                      cursor: "pointer",
+                      fontSize: "var(--font-size-sm)",
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    Reintentar
+                  </button>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    height: "100%",
+                    color: "rgba(255,255,255,0.5)",
+                    fontSize: "var(--font-size-sm)",
+                  }}
+                >
+                  Preparando tu prueba…
+                </div>
+              )}
+            </div>
+            <div
+              style={{
+                width: 300,
+                flexShrink: 0,
+                borderLeft: "1px solid rgba(255,255,255,0.08)",
+                background: "#0a0a0f",
+              }}
+            >
+              {jitsiEl}
+            </div>
+          </>
+        ) : (
+          <div style={{ flex: 1, overflow: "hidden" }}>{supervisorContent}</div>
+        )}
 
         {/* Panel lateral — solo supervisores */}
         {decoded.moderator && (

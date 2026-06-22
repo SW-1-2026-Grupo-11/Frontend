@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { MainLayout } from "@/shared/components/layout";
 import { Button } from "@/shared/components/ui";
 import { useCurrentUser, useLogout } from "@/features/auth";
@@ -25,6 +26,7 @@ const filterSelectStyle: React.CSSProperties = {
 export default function EntrevistasPage() {
   const { data: user } = useCurrentUser();
   const logout = useLogout();
+  const navigate = useNavigate();
 
   const [estadoFilter, setEstadoFilter] = useState<EstadoEntrevista | null>(null);
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
@@ -32,8 +34,8 @@ export default function EntrevistasPage() {
   const [detailEntrevista, setDetailEntrevista] = useState<Entrevista | undefined>(undefined);
 
   const handleOpenCreate = () => {
-    setEditEntrevista(undefined);
-    setIsFormModalOpen(true);
+    // Crear convocatoria = el flujo completo (prueba + evaluador + candidatos)
+    void navigate({ to: "/sesiones/nueva" });
   };
 
   const handleEdit = (entrevista: Entrevista) => {

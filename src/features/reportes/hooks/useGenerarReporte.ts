@@ -1,16 +1,25 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { reportesService, type GenerarReporteDto } from "../services/reportesService";
+import { reportesService, type DecidirReporteDto } from "../services/reportesService";
 
-const BASE_KEY = ["reportes"] as const;
-
+/** Genera (o regenera) el informe de una sesión. Recibe el sesion_id. */
 export function useGenerarReporte() {
   const queryClient = useQueryClient();
-
   return useMutation({
-    mutationFn: (dto: GenerarReporteDto) => reportesService.generarResumen(dto),
+    mutationFn: (sesionId: number) => reportesService.generar(sesionId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: BASE_KEY });
-      queryClient.invalidateQueries({ queryKey: ["alertas"] });
+      void queryClient.invalidateQueries({ queryKey: ["reportes"] });
+      void queryClient.invalidateQueries({ queryKey: ["alertas"] });
+    },
+  });
+}
+
+/** El evaluador firma su decisión (apto / no_apto) sobre un informe. */
+export function useDecidirReporte() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (dto: DecidirReporteDto) => reportesService.decidir(dto),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["reportes"] });
     },
   });
 }

@@ -1,24 +1,18 @@
 import { useState, useRef, useEffect } from "react";
 import { MainLayout } from "@/shared/components/layout";
 import { useCurrentUser, useLogout } from "@/features/auth";
-import {
-  useGetEntrevistas,
-  useGetPruebasEntrevista,
-  useProgramarEntrevista,
-} from "@/features/interviews";
+import { useProgramarEntrevista } from "@/features/interviews";
 import type {
   ProgramarEntrevistaDto,
   InvitadoProgramado,
 } from "@/features/interviews";
 import { useGetUsuarios } from "@/features/usuarios";
 import { useGetPruebas } from "@/features/exams";
-import { useCrearSesion } from "@/features/sesiones";
 import Card from "@/shared/components/ui/Card";
 import Button from "@/shared/components/ui/Button";
 import Input from "@/shared/components/ui/Input";
 import Badge from "@/shared/components/ui/Badge";
 import Spinner from "@/shared/components/ui/Spinner";
-import { PRUEBAS } from "@/config/constants";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -39,6 +33,7 @@ type Toast = { mensaje: string; tipo: "success" | "error" };
 
 type ValidationErrors = {
   titulo?: string;
+  prueba?: string;
   evaluador?: string;
   fecha?: string;
   candidatos?: string;
@@ -102,9 +97,10 @@ export default function SesionNuevaPage() {
 
   // ── Estado del formulario ──
   const [titulo, setTitulo] = useState("");
-  const [entrevistaBaseId, setEntrevistaBaseId] = useState<number | null>(null);
+  const [pruebaId, setPruebaId] = useState<number | null>(null);
   const [fechaProgramada, setFechaProgramada] = useState("");
-  const [duracionMinutos, setDuracionMinutos] = useState(60);
+  // null = heredar la duración de la prueba (lo normal). Un número = override.
+  const [duracionMinutos, setDuracionMinutos] = useState<number | null>(null);
   const [evaluadorId, setEvaluadorId] = useState<number | null>(null);
   const [observaciones, setObservaciones] = useState("");
   const [candidatos, setCandidatos] = useState<Candidato[]>([]);
@@ -126,16 +122,13 @@ export default function SesionNuevaPage() {
   const emailPreviewRef = useRef<HTMLDivElement>(null);
 
   // ── Carga de datos ──
-  const { data: entrevistas, isLoading: loadingEntrevistas } =
-    useGetEntrevistas();
   const { data: usuarios, isLoading: loadingUsuarios } = useGetUsuarios();
   const { data: pruebas } = useGetPruebas();
-  const { data: pruebasEntrevista, isLoading: loadingPruebas } =
-    useGetPruebasEntrevista(entrevistaBaseId ?? 0);
+  // Duración por defecto = la de la prueba elegida (fuente de verdad).
+  const pruebaDuracion = (pruebas ?? []).find((p) => p.id === pruebaId)?.duracion_minutos ?? null;
 
   // ── Mutaciones ──
   const programarMutation = useProgramarEntrevista();
-  const crearSesionMutation = useCrearSesion();
 
   // ── Auto-dismiss del toast ──
   useEffect(() => {
@@ -145,18 +138,9 @@ export default function SesionNuevaPage() {
   }, [toast]);
 
   // ── Datos derivados ──
-  const pruebaMap = new Map((pruebas ?? []).map((p) => [p.id, p]));
   const evaluador = usuarios?.find((u) => u.id === evaluadorId);
 
   // ─── Handlers ─────────────────────────────────────────────────────────────
-
-  const handleSeleccionarEntrevista = (id: number | null) => {
-    setEntrevistaBaseId(id);
-    if (id !== null) {
-      const base = entrevistas?.find((e) => e.id === id);
-      if (base) setTitulo(base.titulo);
-    }
-  };
 
   const handleAgregarCandidato = () => {
     const nombre = nuevoNombre.trim();
@@ -183,6 +167,7 @@ export default function SesionNuevaPage() {
   const validate = (): boolean => {
     const nuevos: ValidationErrors = {};
     if (!titulo.trim()) nuevos.titulo = "El título es requerido";
+    if (!pruebaId) nuevos.prueba = "Selecciona una prueba del banco";
     if (!evaluadorId) nuevos.evaluador = "Selecciona un evaluador";
     if (!fechaProgramada) nuevos.fecha = "La fecha es requerida";
     if (candidatos.length === 0)
@@ -198,8 +183,10 @@ export default function SesionNuevaPage() {
       titulo: titulo.trim(),
       descripcion: observaciones.trim() || undefined,
       evaluador_id: evaluadorId as number,
+      prueba_id: pruebaId ?? undefined,
       fecha_programada: new Date(fechaProgramada).toISOString(),
-      duracion_minutos: duracionMinutos,
+      // Si va null, no se envía → la convocatoria hereda la duración de la prueba.
+      duracion_minutos: duracionMinutos ?? undefined,
       invitados: candidatos,
     };
 
@@ -220,7 +207,6 @@ export default function SesionNuevaPage() {
           `link_supervisor_entrevista_${data.entrevista.id}`,
           supervisorLink,
         );
-        crearSesionMutation.mutate({ entrevista_id: data.entrevista.id });
       },
       onError: () => {
         setToast({
@@ -296,7 +282,7 @@ export default function SesionNuevaPage() {
             marginBottom: "var(--space-xs)",
           }}
         >
-          Programar sesión de evaluación
+          Nueva convocatoria
         </h1>
         <p
           style={{
@@ -336,46 +322,39 @@ export default function SesionNuevaPage() {
                 gap: "var(--space-md)",
               }}
             >
-              {/* Entrevista base */}
+              {/* Prueba a rendir (del banco reutilizable) */}
               <div style={fieldStyle}>
-                <label style={labelStyle}>Entrevista base</label>
-                {loadingEntrevistas ? (
-                  <div
+                <label style={labelStyle}>Prueba a rendir (del banco) *</label>
+                <select
+                  style={{
+                    ...selectStyle,
+                    border: errores.prueba
+                      ? "1px solid var(--color-danger)"
+                      : "1px solid var(--color-border)",
+                  }}
+                  value={pruebaId ?? ""}
+                  onChange={(e) => {
+                    setPruebaId(e.target.value ? Number(e.target.value) : null);
+                    if (errores.prueba)
+                      setErrores((p) => ({ ...p, prueba: undefined }));
+                  }}
+                >
+                  <option value="">Seleccionar prueba…</option>
+                  {(pruebas ?? []).map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.titulo}
+                    </option>
+                  ))}
+                </select>
+                {errores.prueba && (
+                  <span
                     style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "var(--space-sm)",
+                      fontSize: "var(--font-size-sm)",
+                      color: "var(--color-danger)",
                     }}
                   >
-                    <Spinner size="sm" />
-                    <span
-                      style={{
-                        fontSize: "var(--font-size-sm)",
-                        color: "var(--color-text-muted)",
-                      }}
-                    >
-                      Cargando entrevistas...
-                    </span>
-                  </div>
-                ) : (
-                  <select
-                    style={selectStyle}
-                    value={entrevistaBaseId ?? ""}
-                    onChange={(e) =>
-                      handleSeleccionarEntrevista(
-                        e.target.value ? Number(e.target.value) : null,
-                      )
-                    }
-                  >
-                    <option value="">
-                      Seleccionar entrevista base (opcional)
-                    </option>
-                    {(entrevistas ?? []).map((e) => (
-                      <option key={e.id} value={e.id}>
-                        {e.titulo}
-                      </option>
-                    ))}
-                  </select>
+                    {errores.prueba}
+                  </span>
                 )}
               </div>
 
@@ -433,15 +412,28 @@ export default function SesionNuevaPage() {
                   <label style={labelStyle}>Duración</label>
                   <select
                     style={selectStyle}
-                    value={duracionMinutos}
-                    onChange={(e) => setDuracionMinutos(Number(e.target.value))}
+                    value={duracionMinutos ?? ""}
+                    onChange={(e) =>
+                      setDuracionMinutos(e.target.value === "" ? null : Number(e.target.value))
+                    }
                   >
+                    <option value="">
+                      {pruebaDuracion
+                        ? `Usar el tiempo de la prueba (${pruebaDuracion} min)`
+                        : "Usar el tiempo de la prueba"}
+                    </option>
                     {DURACION_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>
                         {opt.label}
                       </option>
                     ))}
                   </select>
+                  <span
+                    style={{ fontSize: "var(--font-size-sm)", color: "var(--color-text-muted)" }}
+                  >
+                    Vacío = usa el tiempo de la prueba. Cámbialo solo para dar más/menos
+                    tiempo a esta convocatoria.
+                  </span>
                 </div>
               </div>
 
@@ -706,142 +698,6 @@ export default function SesionNuevaPage() {
             </div>
           </Card>
 
-          {/* ── SECCIÓN 3: Pruebas asignadas ── */}
-          <Card title="Pruebas asignadas">
-            {!entrevistaBaseId ? (
-              <div
-                style={{
-                  textAlign: "center",
-                  padding: "var(--space-xl)",
-                  color: "var(--color-text-muted)",
-                  fontSize: "var(--font-size-sm)",
-                  fontStyle: "italic",
-                }}
-              >
-                Selecciona una entrevista base para ver las pruebas
-              </div>
-            ) : loadingPruebas ? (
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "center",
-                  padding: "var(--space-xl)",
-                }}
-              >
-                <Spinner size="md" />
-              </div>
-            ) : (pruebasEntrevista ?? []).length === 0 ? (
-              <div
-                style={{
-                  textAlign: "center",
-                  padding: "var(--space-xl)",
-                  color: "var(--color-text-muted)",
-                  fontSize: "var(--font-size-sm)",
-                  fontStyle: "italic",
-                }}
-              >
-                Esta entrevista no tiene pruebas asignadas
-              </div>
-            ) : (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "var(--space-sm)",
-                }}
-              >
-                {(pruebasEntrevista ?? []).map((pe, i) => {
-                  const prueba = pruebaMap.get(pe.prueba);
-
-                  return (
-                    <div
-                      key={pe.id}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "var(--space-md)",
-                        padding: "var(--space-sm) var(--space-md)",
-                        backgroundColor: "var(--color-background)",
-                        borderRadius: "var(--radius-md)",
-                        border: "1px solid var(--color-border)",
-                      }}
-                    >
-                      {/* Número de orden */}
-                      <div
-                        style={{
-                          width: "28px",
-                          height: "28px",
-                          borderRadius: "var(--radius-full)",
-                          backgroundColor: "var(--color-primary)",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontSize: "var(--font-size-sm)",
-                          fontWeight: "var(--font-weight-bold)",
-                          color: "#fff",
-                          flexShrink: 0,
-                        }}
-                      >
-                        {i + 1}
-                      </div>
-
-                      {/* Título y detalles */}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div
-                          style={{
-                            fontSize: "var(--font-size-base)",
-                            fontWeight: "var(--font-weight-medium)",
-                            color: "var(--color-text)",
-                          }}
-                        >
-                          {prueba?.titulo ?? `Prueba #${pe.prueba}`}
-                        </div>
-                        {prueba && (
-                          <div
-                            style={{
-                              fontSize: "var(--font-size-sm)",
-                              color: "var(--color-text-muted)",
-                              marginTop: "2px",
-                            }}
-                          >
-                            {prueba.duracion_minutos} {PRUEBAS.DETAIL_MINUTOS} ·{" "}
-                            {prueba.puntaje_maximo} {PRUEBAS.DETAIL_PUNTOS}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Badges */}
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: "var(--space-xs)",
-                          flexShrink: 0,
-                        }}
-                      >
-                        {prueba && (
-                          <Badge variant={PRUEBAS.TIPO_BADGE[prueba.tipo]}>
-                            {PRUEBAS.TIPO_LABELS[prueba.tipo]}
-                          </Badge>
-                        )}
-                        <Badge variant="info">Obligatoria</Badge>
-                      </div>
-                    </div>
-                  );
-                })}
-
-                <p
-                  style={{
-                    fontSize: "var(--font-size-sm)",
-                    color: "var(--color-text-muted)",
-                    fontStyle: "italic",
-                    margin: "var(--space-xs) 0 0",
-                  }}
-                >
-                  Pruebas heredadas de la entrevista base.
-                </p>
-              </div>
-            )}
-          </Card>
         </div>
 
         {/* ─ Columna derecha ─ */}
@@ -1142,7 +998,12 @@ export default function SesionNuevaPage() {
                         : "Por definir"}
                     </div>
                     <div>
-                      <strong>Duración:</strong> {duracionMinutos} minutos
+                      <strong>Duración:</strong>{" "}
+                      {duracionMinutos != null
+                        ? `${duracionMinutos} minutos`
+                        : pruebaDuracion
+                          ? `${pruebaDuracion} minutos (de la prueba)`
+                          : "Tiempo de la prueba"}
                     </div>
                     {evaluador && (
                       <div>
@@ -1249,8 +1110,8 @@ export default function SesionNuevaPage() {
           style={{ width: "100%" }}
         >
           {enviado
-            ? "✓ Sesión creada exitosamente"
-            : "Crear sesión y enviar links"}
+            ? "✓ Convocatoria creada exitosamente"
+            : "Crear convocatoria y enviar links"}
         </Button>
       </div>
     </MainLayout>

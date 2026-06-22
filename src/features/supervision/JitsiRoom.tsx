@@ -9,6 +9,7 @@ type JitsiRoomProps = {
   displayName: string;
   email?: string;
   isModerator: boolean;
+  jwt?: string;
   onParticipantJoined?: (id: string, displayName: string) => void;
   onParticipantLeft?: (id: string) => void;
   onVideoMuteChanged?: (muted: boolean) => void;
@@ -24,6 +25,7 @@ const JitsiRoom = forwardRef<JitsiRoomHandle, JitsiRoomProps>(function JitsiRoom
     displayName,
     email,
     isModerator,
+    jwt,
     onParticipantJoined,
     onParticipantLeft,
     onVideoMuteChanged,
@@ -45,7 +47,7 @@ const JitsiRoom = forwardRef<JitsiRoomHandle, JitsiRoomProps>(function JitsiRoom
   };
 
   const { isLoaded, isError, hangup, kickParticipant, getParticipantCount, captureScreenshot } =
-    useJitsiIframe({ containerRef, roomName, displayName, email, isModerator, callbacks });
+    useJitsiIframe({ containerRef, roomName, displayName, email, isModerator, jwt, callbacks });
 
   useImperativeHandle(ref, () => ({
     hangup,

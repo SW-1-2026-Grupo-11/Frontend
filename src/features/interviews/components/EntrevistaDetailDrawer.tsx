@@ -1,15 +1,11 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
+import { useNavigate } from "@tanstack/react-router";
 import { Badge, Button, Spinner } from "@/shared/components/ui";
-import { ENTREVISTAS, PRUEBAS } from "@/config/constants";
-import { useGetPruebas } from "@/features/exams";
-import {
-  useGetPruebasEntrevista,
-  useRemoverAsignacion,
-  useGetInvitadosPorEntrevista,
-} from "../hooks/useEntrevistas";
-import type { Entrevista, EstadoAsignacion, EstadoEntrevista, PruebaEntrevista } from "../types";
-import AsignarPruebaModal from "./AsignarPruebaModal";
+import { ENTREVISTAS } from "@/config/constants";
+import { useGetSesionesDeConvocatoria } from "@/features/sesiones";
+import { useGetInvitadosPorEntrevista } from "../hooks/useEntrevistas";
+import type { Entrevista } from "../types";
 
 const INV_AVATAR_COLORS = ["#1d4ed8", "#7c3aed", "#0891b2", "#be185d", "#15803d", "#b45309"];
 
@@ -65,13 +61,37 @@ export default function EntrevistaDetailDrawer({
   entrevista,
   onClose,
 }: EntrevistaDetailDrawerProps) {
-  const { data: asignaciones, isLoading } = useGetPruebasEntrevista(entrevista.id);
-  const { data: pruebas } = useGetPruebas();
   const { data: invitados = [], isLoading: loadingInvitados } = useGetInvitadosPorEntrevista(entrevista.id);
-  const removerAsignacion = useRemoverAsignacion();
-  const [isAsignarOpen, setIsAsignarOpen] = useState(false);
+  const { data: sesiones = [] } = useGetSesionesDeConvocatoria(entrevista.id);
+  const navigate = useNavigate();
   const [copiadoInv, setCopiadoInv] = useState<Record<number, boolean>>({});
   const [copiadoTodosInv, setCopiadoTodosInv] = useState(false);
+  const [supMsg, setSupMsg] = useState<string | null>(null);
+
+  // Mapa: invitado → su sesión (para mostrar estado/nota y enlazar al informe)
+  const sesionPorInvitado = new Map(
+    sesiones.filter((s) => s.invitacion != null).map((s) => [s.invitacion, s]),
+  );
+
+  // Supervisar EN VIVO a un candidato puntual: hay 1 sala por candidato (inv-<id>),
+  // así que el supervisor entra a la sala de ESE candidato vía ?watch=<invitado_id>.
+  const handleSupervisarCandidato = (invitadoId: number) => {
+    const link = localStorage.getItem(`link_supervisor_entrevista_${entrevista.id}`);
+    if (!link) {
+      setSupMsg(
+        "No se encontró el link de supervisor en este navegador (se genera al programar la convocatoria).",
+      );
+      setTimeout(() => setSupMsg(null), 5000);
+      return;
+    }
+    try {
+      const url = new URL(link);
+      url.searchParams.set("watch", String(invitadoId));
+      window.location.href = `${window.location.origin}${url.pathname}${url.search}`;
+    } catch {
+      window.location.href = `${link}${link.includes("?") ? "&" : "?"}watch=${invitadoId}`;
+    }
+  };
 
   const handleCopiarInvitado = (id: number, link: string) => {
     void navigator.clipboard.writeText(link).then(() => {
@@ -89,16 +109,6 @@ export default function EntrevistaDetailDrawer({
       setCopiadoTodosInv(true);
       setTimeout(() => setCopiadoTodosInv(false), 2000);
     });
-  };
-
-  const pruebaMap = new Map((pruebas ?? []).map((p) => [p.id, p]));
-  const asignacionesList = asignaciones ?? [];
-  const assignedPruebaIds = asignacionesList.map((a) => a.prueba);
-
-  const handleRemover = (asignacion: PruebaEntrevista) => {
-    if (window.confirm(ENTREVISTAS.CONFIRM_REMOVER_PRUEBA)) {
-      removerAsignacion.mutate({ id: asignacion.id, entrevistaId: entrevista.id });
-    }
   };
 
   return createPortal(
@@ -174,16 +184,32 @@ export default function EntrevistaDetailDrawer({
           </button>
         </div>
 
-        {/* Badge de estado */}
-        <div>
+        {/* Badge de estado + Supervisar en vivo */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "var(--space-md)",
+            flexWrap: "wrap",
+          }}
+        >
           <Badge
             variant={
-              ENTREVISTAS.ESTADO_BADGE[entrevista.estado as EstadoEntrevista] as BadgeVariant
+              ENTREVISTAS.ESTADO_BADGE[entrevista.estado_efectivo] as BadgeVariant
             }
           >
-            {ENTREVISTAS.ESTADO_LABELS[entrevista.estado as EstadoEntrevista]}
+            {ENTREVISTAS.ESTADO_LABELS[entrevista.estado_efectivo]}
           </Badge>
+          <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
+            Supervisá a cada candidato desde su fila ↓
+          </span>
         </div>
+        {supMsg && (
+          <p style={{ margin: 0, fontSize: "var(--font-size-sm)", color: "var(--color-danger)" }}>
+            {supMsg}
+          </p>
+        )}
 
         {/* Descripción */}
         <div>
@@ -220,136 +246,15 @@ export default function EntrevistaDetailDrawer({
           </div>
         </div>
 
-        {/* Sección pruebas */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: "var(--space-md)",
-            }}
-          >
-            <p
-              style={{
-                fontSize: "var(--font-size-base)",
-                fontWeight: "var(--font-weight-bold)",
-                color: "var(--color-text)",
-              }}
-            >
-              {ENTREVISTAS.DETAIL_PRUEBAS_TITLE}
-            </p>
-            <Button variant="primary" size="sm" onClick={() => setIsAsignarOpen(true)}>
-              {ENTREVISTAS.BTN_ASIGNAR_PRUEBA}
-            </Button>
-          </div>
-
-          {isLoading ? (
-            <div style={{ display: "flex", justifyContent: "center", padding: "var(--space-lg)" }}>
-              <Spinner size="md" />
-            </div>
-          ) : asignacionesList.length === 0 ? (
-            <p
-              style={{
-                color: "var(--color-text-muted)",
-                fontSize: "var(--font-size-sm)",
-                textAlign: "center",
-                padding: "var(--space-lg)",
-                backgroundColor: "var(--color-background)",
-                borderRadius: "var(--radius-md)",
-                border: "1px dashed var(--color-border)",
-              }}
-            >
-              {ENTREVISTAS.DETAIL_NO_PRUEBAS}
-            </p>
+        {/* Prueba de la convocatoria (la que rinde el candidato) */}
+        <div>
+          <p style={metaLabelStyle}>Prueba a rendir</p>
+          {entrevista.prueba_nombre ? (
+            <p style={metaValueStyle}>{entrevista.prueba_nombre}</p>
           ) : (
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "var(--space-xs)",
-                backgroundColor: "var(--color-background)",
-                borderRadius: "var(--radius-md)",
-                border: "1px solid var(--color-border)",
-                overflow: "hidden",
-              }}
-            >
-              {asignacionesList.map((asignacion) => {
-                const prueba = pruebaMap.get(asignacion.prueba);
-                return (
-                  <div
-                    key={asignacion.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "var(--space-sm)",
-                      padding: "var(--space-sm) var(--space-md)",
-                      borderBottom: "1px solid var(--color-border)",
-                    }}
-                  >
-                    {/* Tipo badge */}
-                    {prueba && (
-                      <Badge variant={PRUEBAS.TIPO_BADGE[prueba.tipo] as BadgeVariant}>
-                        {PRUEBAS.TIPO_LABELS[prueba.tipo]}
-                      </Badge>
-                    )}
-
-                    {/* Título */}
-                    <span
-                      style={{
-                        flex: 1,
-                        fontSize: "var(--font-size-sm)",
-                        color: "var(--color-text)",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                      title={prueba?.titulo ?? String(asignacion.prueba)}
-                    >
-                      {prueba?.titulo ?? `Prueba #${asignacion.prueba}`}
-                    </span>
-
-                    {/* Estado asignación */}
-                    <Badge
-                      variant={
-                        ENTREVISTAS.ESTADO_ASIGNACION_BADGE[
-                          asignacion.estado as EstadoAsignacion
-                        ] as BadgeVariant
-                      }
-                    >
-                      {ENTREVISTAS.ESTADO_ASIGNACION_LABELS[asignacion.estado as EstadoAsignacion]}
-                    </Badge>
-
-                    {/* Observaciones */}
-                    {asignacion.observaciones && (
-                      <span
-                        style={{
-                          fontSize: "var(--font-size-xs, 0.75rem)",
-                          color: "var(--color-text-muted)",
-                          maxWidth: 120,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                        title={asignacion.observaciones}
-                      >
-                        {asignacion.observaciones}
-                      </span>
-                    )}
-
-                    {/* Remover */}
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      disabled={removerAsignacion.isPending}
-                      onClick={() => handleRemover(asignacion)}
-                    >
-                      {ENTREVISTAS.BTN_REMOVER}
-                    </Button>
-                  </div>
-                );
-              })}
-            </div>
+            <p style={{ ...metaValueStyle, color: "var(--color-text-muted)", fontStyle: "italic" }}>
+              Sin prueba asignada
+            </p>
           )}
         </div>
 
@@ -385,7 +290,7 @@ export default function EntrevistaDetailDrawer({
             </div>
           ) : invitados.length === 0 ? (
             <p style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)", textAlign: "center", padding: "var(--space-lg)", backgroundColor: "var(--color-background)", borderRadius: "var(--radius-md)", border: "1px dashed var(--color-border)" }}>
-              No hay invitados para esta entrevista
+              No hay invitados para esta convocatoria
             </p>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-xs)", backgroundColor: "var(--color-background)", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", overflow: "hidden" }}>
@@ -416,6 +321,50 @@ export default function EntrevistaDetailDrawer({
                     <Badge variant={INV_ESTADO_BADGE[inv.estado] ?? "neutral"}>
                       {INV_ESTADO_LABEL[inv.estado] ?? inv.estado}
                     </Badge>
+                    <button
+                      onClick={() => handleSupervisarCandidato(inv.id)}
+                      title="Supervisar en vivo a este candidato"
+                      style={{
+                        padding: "4px 10px",
+                        background: "transparent",
+                        border: "1px solid var(--color-primary)",
+                        borderRadius: "var(--radius-sm)",
+                        color: "var(--color-primary)",
+                        cursor: "pointer",
+                        fontSize: "var(--font-size-xs)",
+                        fontFamily: "inherit",
+                        flexShrink: 0,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      🎥 Supervisar
+                    </button>
+                    {(() => {
+                      const ses = sesionPorInvitado.get(inv.id);
+                      if (!ses) return null;
+                      return (
+                        <button
+                          onClick={() => {
+                            onClose();
+                            void navigate({ to: `/sesiones/${ses.id}/detalle` as never });
+                          }}
+                          style={{
+                            padding: "4px 10px",
+                            background: "transparent",
+                            border: "1px solid var(--color-primary)",
+                            borderRadius: "var(--radius-sm)",
+                            color: "var(--color-primary)",
+                            cursor: "pointer",
+                            fontSize: "var(--font-size-xs)",
+                            fontFamily: "inherit",
+                            flexShrink: 0,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {ses.nota_final != null ? `Nota ${Number(ses.nota_final)} · ver` : "Ver sesión"}
+                        </button>
+                      );
+                    })()}
                   </div>
 
                   {/* Fila inferior: link + botón copiar */}
@@ -472,13 +421,6 @@ export default function EntrevistaDetailDrawer({
         </div>
       </div>
 
-      {isAsignarOpen && (
-        <AsignarPruebaModal
-          entrevistaId={entrevista.id}
-          assignedPruebaIds={assignedPruebaIds}
-          onClose={() => setIsAsignarOpen(false)}
-        />
-      )}
     </div>,
     document.body
   );

@@ -17,6 +17,7 @@ type UseJitsiIframeParams = {
   displayName: string;
   email?: string;
   isModerator: boolean;
+  jwt?: string;
   callbacks?: JitsiCallbacksIframe;
 };
 
@@ -26,6 +27,7 @@ export default function useJitsiIframe({
   displayName,
   email,
   isModerator,
+  jwt,
   callbacks,
 }: UseJitsiIframeParams) {
   const [isLoaded, setIsLoaded] = useState(false);
@@ -56,23 +58,22 @@ export default function useJitsiIframe({
           configOverwrite.startAsSilentAuditor = false;
         }
 
+        // Toolbar por rol: el candidato (participante) NO comparte pantalla ni
+        // gestiona participantes; el supervisor (moderador) tiene todo.
+        const toolbarButtons = isModerator
+          ? ["microphone", "camera", "desktop", "chat", "tileview", "participants-pane", "hangup"]
+          : ["microphone", "camera", "chat", "hangup"];
+
         const api = new window.JitsiMeetExternalAPI(env.JITSI_DOMAIN, {
           roomName,
           parentNode: containerRef.current,
           width: "100%",
           height: "100%",
           userInfo: { displayName, email },
+          jwt,
           configOverwrite,
           interfaceConfigOverwrite: {
-            TOOLBAR_BUTTONS: [
-              "microphone",
-              "camera",
-              "hangup",
-              "desktop",
-              "chat",
-              "tileview",
-              "participants-pane",
-            ],
+            TOOLBAR_BUTTONS: toolbarButtons,
             SHOW_JITSI_WATERMARK: false,
             SHOW_WATERMARK_FOR_GUESTS: false,
             DISABLE_JOIN_LEAVE_NOTIFICATIONS: false,
@@ -149,7 +150,7 @@ export default function useJitsiIframe({
       apiRef.current?.dispose();
       apiRef.current = null;
     };
-  }, [roomName, displayName, email, isModerator, containerRef]);
+  }, [roomName, displayName, email, isModerator, jwt, containerRef]);
 
   const hangup = useCallback(() => {
     apiRef.current?.executeCommand("hangup");

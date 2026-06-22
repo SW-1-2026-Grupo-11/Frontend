@@ -49,21 +49,6 @@ export default function SesionesPage() {
             Gestiona y monitorea las sesiones de entrevista
           </p>
         </div>
-        <button
-          onClick={() => void navigate({ to: "/sesiones/nueva" })}
-          style={{
-            padding: "8px 18px",
-            background: "var(--color-primary)",
-            color: "#fff",
-            border: "none",
-            borderRadius: "var(--radius-md)",
-            cursor: "pointer",
-            fontSize: "var(--font-size-sm)",
-            fontWeight: "var(--font-weight-semibold)",
-          }}
-        >
-          {SESIONES.BTN_NUEVA}
-        </button>
       </div>
 
       {/* Table */}

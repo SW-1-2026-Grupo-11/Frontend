@@ -74,14 +74,6 @@ const supervisionRoute = createRoute({
   component: HomePage,
 });
 
-const sessionRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/session/$sessionId",
-  beforeLoad: () => {
-    throw redirect({ to: "/dashboard" });
-  },
-});
-
 const reportesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/reportes",
@@ -134,7 +126,6 @@ const routeTree = rootRoute.addChildren([
   usuariosRoute,
   pruebasRoute,
   entrevistasRoute,
-  sessionRoute,
   reportesRoute,
   sesionesRoute,
   sesionNuevaRoute,

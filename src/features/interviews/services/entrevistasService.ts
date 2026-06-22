@@ -2,10 +2,8 @@ import { api } from "@/shared/lib/axios";
 import type { PaginatedResponse } from "@/shared/types/api";
 import type {
   Entrevista,
-  PruebaEntrevista,
   CreateEntrevistaDto,
   UpdateEntrevistaDto,
-  AsignarPruebaDto,
   ProgramarEntrevistaDto,
   ProgramarEntrevistaResponse,
   InvitadoProgramado,
@@ -32,18 +30,8 @@ export const entrevistasService = {
   deleteEntrevista: (id: number): Promise<void> =>
     api.delete(`/entrevistas/entrevistas/${id}/`).then(() => undefined),
 
-  getPruebasEntrevista: (entrevistaId: number): Promise<PruebaEntrevista[]> =>
-    api
-      .get<PaginatedResponse<PruebaEntrevista>>("/pruebas/pruebas-entrevista/", {
-        params: { entrevista: entrevistaId },
-      })
-      .then((r) => r.data.results),
-
-  asignarPrueba: (dto: AsignarPruebaDto): Promise<PruebaEntrevista> =>
-    api.post<PruebaEntrevista>("/pruebas/pruebas-entrevista/", dto).then((r) => r.data),
-
-  removerAsignacion: (pruebaEntrevistaId: number): Promise<void> =>
-    api.delete(`/pruebas/pruebas-entrevista/${pruebaEntrevistaId}/`).then(() => undefined),
+  cancelarEntrevista: (id: number): Promise<Entrevista> =>
+    api.post<Entrevista>(`/entrevistas/entrevistas/${id}/cancelar/`, {}).then((r) => r.data),
 
   programarEntrevista: (dto: ProgramarEntrevistaDto): Promise<ProgramarEntrevistaResponse> =>
     api

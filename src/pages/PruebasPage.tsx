@@ -2,7 +2,7 @@ import { useState } from "react";
 import { MainLayout } from "@/shared/components/layout";
 import { Button } from "@/shared/components/ui";
 import { useCurrentUser, useLogout } from "@/features/auth";
-import { PruebasTable, PruebaModal, PruebaDetailModal } from "@/features/exams";
+import { PruebasTable, PruebaModal, PruebaDetailModal, PruebaContenidoModal } from "@/features/exams";
 import type { Prueba, TipoPrueba } from "@/features/exams";
 import { UI, PRUEBAS } from "@/config/constants";
 
@@ -26,6 +26,7 @@ export default function PruebasPage() {
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [editPrueba, setEditPrueba] = useState<Prueba | undefined>(undefined);
   const [detailPrueba, setDetailPrueba] = useState<Prueba | undefined>(undefined);
+  const [contenidoPrueba, setContenidoPrueba] = useState<Prueba | undefined>(undefined);
 
   const handleOpenCreate = () => {
     setEditPrueba(undefined);
@@ -39,6 +40,10 @@ export default function PruebasPage() {
 
   const handleView = (prueba: Prueba) => {
     setDetailPrueba(prueba);
+  };
+
+  const handleContenido = (prueba: Prueba) => {
+    setContenidoPrueba(prueba);
   };
 
   const handleCloseForm = () => {
@@ -98,7 +103,12 @@ export default function PruebasPage() {
         </div>
       </div>
 
-      <PruebasTable tipoFilter={tipoFilter} onView={handleView} onEdit={handleEdit} />
+      <PruebasTable
+        tipoFilter={tipoFilter}
+        onView={handleView}
+        onEdit={handleEdit}
+        onContenido={handleContenido}
+      />
 
       {isFormModalOpen && (
         <PruebaModal onClose={handleCloseForm} prueba={editPrueba} />
@@ -106,6 +116,13 @@ export default function PruebasPage() {
 
       {detailPrueba && (
         <PruebaDetailModal prueba={detailPrueba} onClose={handleCloseDetail} />
+      )}
+
+      {contenidoPrueba && (
+        <PruebaContenidoModal
+          prueba={contenidoPrueba}
+          onClose={() => setContenidoPrueba(undefined)}
+        />
       )}
     </MainLayout>
   );

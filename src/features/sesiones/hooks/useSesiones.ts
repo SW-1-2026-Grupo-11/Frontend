@@ -5,7 +5,8 @@ import type {
   ActualizarEstadoDto,
   ActualizarObservacionesDto,
   AgregarInvitadoDto,
-  CrearSesionDto,
+  Sesion,
+  ResponderDto,
 } from "../types";
 
 const BASE_KEY = ["sesiones"] as const;
@@ -17,20 +18,11 @@ export function useGetSesiones() {
   });
 }
 
-export function useCrearSesion() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (dto: CrearSesionDto) => sesionesService.crearSesion(dto),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: BASE_KEY });
-    },
-  });
-}
-
-export function useGetSesionPorEntrevista(entrevistaId: number) {
+// Todas las sesiones de una convocatoria (para el detalle: candidato → su sesión)
+export function useGetSesionesDeConvocatoria(entrevistaId: number) {
   return useQuery({
-    queryKey: [...BASE_KEY, "entrevista", entrevistaId] as const,
-    queryFn: () => sesionesService.getSesionPorEntrevista(entrevistaId),
+    queryKey: [...BASE_KEY, "de-convocatoria", entrevistaId] as const,
+    queryFn: () => sesionesService.getSesionesPorEntrevista(entrevistaId),
     enabled: entrevistaId > 0,
   });
 }
@@ -76,32 +68,86 @@ export function useAgregarInvitado() {
   });
 }
 
-export function useFinalizarSesion() {
-  const queryClient = useQueryClient();
+// ─── Rendir prueba (Capa 3c) — todo con el JWT del invitado ────────────────────
+
+// Enviar (o actualizar) la respuesta de una pregunta
+export function useResponder() {
   return useMutation({
-    mutationFn: (sesionId: number) => sesionesService.finalizarSesion(sesionId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: BASE_KEY });
+    mutationFn: async ({
+      sesionId,
+      token,
+      dto,
+    }: {
+      sesionId: number;
+      token: string;
+      dto: ResponderDto;
+    }) => {
+      const res = await fetch(`${env.API_URL}/sesiones/${sesionId}/responder/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, ...dto }),
+      });
+      if (!res.ok) throw new Error("Error al enviar la respuesta");
+      return res.json() as Promise<unknown>;
     },
   });
 }
 
-// Usa fetch directo con el JWT del invitado — no pasa por el interceptor Bearer del usuario autenticado
-export function useMarcarAceptado() {
+// El candidato termina la prueba → sesión finalizada
+export function useFinalizarCandidato() {
   return useMutation({
-    mutationFn: async ({ invitadoId, token }: { invitadoId: number; token: string }) => {
-      const res = await fetch(
-        `${env.API_URL}/entrevistas/invitados/${invitadoId}/marcar-aceptado/`,
-        {
-          method: "PATCH",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        },
-      );
-      if (!res.ok) throw new Error("Error al marcar invitado como aceptado");
-      return res.json() as Promise<unknown>;
+    mutationFn: async ({ sesionId, token }: { sesionId: number; token: string }) => {
+      const res = await fetch(`${env.API_URL}/sesiones/${sesionId}/finalizar-candidato/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+      if (!res.ok) throw new Error("Error al finalizar la prueba");
+      return res.json() as Promise<Sesion>;
     },
+  });
+}
+
+// ─── Calificación (Capa 4b) — lado evaluador (api autenticado) ──────────────────
+
+export function useGetRespuestas(sesionId: number) {
+  return useQuery({
+    queryKey: [...BASE_KEY, sesionId, "respuestas"] as const,
+    queryFn: () => sesionesService.getRespuestas(sesionId),
+    enabled: sesionId > 0,
+  });
+}
+
+export function useCalificarAuto() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (sesionId: number) => sesionesService.calificarAuto(sesionId),
+    onSuccess: (_data, sesionId) =>
+      queryClient.invalidateQueries({ queryKey: [...BASE_KEY, sesionId] }),
+  });
+}
+
+export function usePuntuar() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      sesionId,
+      respuestaId,
+      puntaje,
+    }: {
+      sesionId: number;
+      respuestaId: number;
+      puntaje: number;
+    }) => sesionesService.puntuar(sesionId, respuestaId, puntaje),
+    onSuccess: (_data, { sesionId }) =>
+      queryClient.invalidateQueries({ queryKey: [...BASE_KEY, sesionId] }),
+  });
+}
+
+export function useGetAuditoria(sesionId: number) {
+  return useQuery({
+    queryKey: [...BASE_KEY, sesionId, "auditoria"] as const,
+    queryFn: () => sesionesService.getAuditoria(sesionId),
+    enabled: sesionId > 0,
   });
 }

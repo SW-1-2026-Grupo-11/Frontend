@@ -9,12 +9,11 @@ type NavItem = {
 
 const NAV_ITEMS: NavItem[] = [
   { label: UI.NAV_DASHBOARD, to: "/dashboard", icon: "📊" },
-  { label: UI.NAV_SUPERVISION, to: "/supervision", icon: "📡" },
   { label: UI.NAV_USUARIOS, to: "/usuarios", icon: "👥" },
   { label: UI.NAV_PRUEBAS, to: "/pruebas", icon: "📝" },
   { label: UI.NAV_ENTREVISTAS, to: "/entrevistas", icon: "🗓️" },
-  { label: "Reportes IA", to: "/reportes", icon: "🤖" },
-  { label: UI.NAV_SESIONES, to: "/sesiones/nueva", icon: "🎥" },
+  { label: UI.NAV_SESIONES, to: "/sesiones", icon: "🎥" },
+  { label: UI.NAV_REPORTES, to: "/reportes", icon: "🤖" },
 ];
 
 type MainLayoutProps = {
@@ -58,7 +57,7 @@ export default function MainLayout({ children, userName = "Usuario", onLogout }:
               color: "var(--color-primary)",
             }}
           >
-            Proctoring
+            EvalSecure
           </span>
         </div>
 

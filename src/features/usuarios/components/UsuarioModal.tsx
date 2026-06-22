@@ -65,7 +65,7 @@ export default function UsuarioModal({ onClose, usuario }: UsuarioModalProps) {
     email: usuario?.email ?? "",
     telefono: usuario?.telefono ?? "",
     password: "",
-    rol: usuario?.rol ?? "supervisor",
+    rol: usuario?.rol ?? "evaluador",
     estado: usuario?.estado ?? "activo",
   });
   const [formErrors, setFormErrors] = useState<FormErrors>({});

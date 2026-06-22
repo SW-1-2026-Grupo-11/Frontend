@@ -62,7 +62,7 @@ function inferEmotion(alertas: Alerta[]): string {
 }
 
 function computeMetrics(inv: InvitadoSesion, all: Alerta[], fechaInicio: string): ParticipantData {
-  const alertas = all.filter((a) => a.participante === inv.id);
+  const alertas = all.filter((a) => a.participante_nombre === inv.nombre);
   const altaCount = alertas.filter((a) => a.severidad === "alta").length;
   const mediaCount = alertas.filter((a) => a.severidad === "media").length;
   const integridad = Math.max(0, 100 - altaCount * 10 - mediaCount * 5);
@@ -505,8 +505,6 @@ function RightSidebar({
   alertas: Alerta[];
   participants: ParticipantData[];
 }) {
-  const nameById = Object.fromEntries(participants.map((p) => [p.id, p.nombre]));
-
   const highRisk = participants.filter((p) => p.integridad < 70).length;
   const medRisk = participants.filter((p) => p.integridad >= 70 && p.integridad < 85).length;
   const okCount = participants.filter((p) => p.integridad >= 85).length;
@@ -550,7 +548,7 @@ function RightSidebar({
                 </p>
                 <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2 }}>
                   <span style={{ fontSize: 9, color: "var(--color-text-muted)" }}>
-                    {nameById[a.participante] ?? `#${a.participante}`}
+                    {a.participante_nombre ?? "—"}
                   </span>
                   <span style={{ fontSize: 9, color: "var(--color-text-muted)" }}>
                     {relativeTime(a.timestamp_alerta)}
@@ -640,15 +638,9 @@ export default function SalaPage() {
     );
   }
 
-  function handleGenerarReporte(p: ParticipantData) {
+  function handleGenerarReporte(_p: ParticipantData) {
     if (!sesionDetalle) return;
-    generarReporte.mutate({
-      entrevista_id: String(sesionDetalle.entrevista),
-      participante_id: String(p.id),
-      puntaje_total: p.integridad,
-      total_alertas: p.alertCount,
-      nivel_riesgo: p.integridad < 70 ? "alto" : p.integridad < 85 ? "medio" : "bajo",
-    });
+    generarReporte.mutate(sesionId);
   }
 
   if (isLoading || !sesionDetalle) {
