@@ -51,7 +51,7 @@ export default function JoinPage() {
   // ── URL search params ──
   const rawSearch = useSearch({ strict: false }) as { token?: string; watch?: string };
   const token = rawSearch.token ?? "";
-  const watchInvitadoId = rawSearch.watch ?? "";
+  const watchParam = rawSearch.watch ?? "";
 
   // ── JWT decode ──
   const decoded = useJwtDecode(token || null);
@@ -72,6 +72,11 @@ export default function JoinPage() {
   const [agregandoInvitado, setAgregandoInvitado] = useState(false);
   const [mensajeAgregar, setMensajeAgregar] = useState<string | null>(null);
   const [invitadosExtra, setInvitadosExtra] = useState<InvitadoSesion[]>([]);
+  // A quién supervisa el moderador. Viene del ?watch= o se elige en pantalla.
+  // El supervisor SIEMPRE entra a la sala de un candidato (inv-{id}); sin esto
+  // caería en una sala general sin JWT y Jitsi pediría login (ENABLE_GUESTS=0).
+  const [watchLocal, setWatchLocal] = useState("");
+  const watchInvitadoId = watchParam || watchLocal;
 
   // ── Refs ──
   const jitsiRef = useRef<JitsiRoomHandle>(null);
@@ -246,6 +251,14 @@ export default function JoinPage() {
     obsInitRef.current = true;
     setObservaciones(sesionDetalle.observaciones_internas ?? "");
   }, [sesionDetalle]);
+
+  // Si el supervisor no eligió a quién mirar y hay UN solo candidato, lo elige
+  // solo (caso típico: 1 candidato por convocatoria). Con varios, muestra el selector.
+  useEffect(() => {
+    if (!decoded?.moderator || watchInvitadoId) return;
+    const invs = sesionDetalle?.invitados ?? [];
+    if (invs.length === 1) setWatchLocal(String(invs[0].id));
+  }, [decoded, watchInvitadoId, sesionDetalle]);
 
   // ─── Handlers ─────────────────────────────────────────────────────────────
 
@@ -504,6 +517,102 @@ export default function JoinPage() {
     />
   );
 
+  // El supervisor entra al video SOLO de un candidato puntual (sala inv-{id}).
+  // Si todavía no eligió a quién mirar, mostramos el selector en vez de meterlo
+  // a una sala general sin JWT (que dispararía el login de Jitsi).
+  const supervisorContent =
+    decoded.moderator && !watchInvitadoId ? (
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "var(--space-md)",
+          color: "rgba(255,255,255,0.85)",
+          padding: 24,
+        }}
+      >
+        <span style={{ fontSize: "2rem" }}>👁️</span>
+        <p style={{ margin: 0, fontSize: "var(--font-size-lg)", fontWeight: "var(--font-weight-bold)" }}>
+          Elegí a quién supervisar
+        </p>
+        <p
+          style={{
+            margin: 0,
+            fontSize: "var(--font-size-sm)",
+            color: "rgba(255,255,255,0.5)",
+            textAlign: "center",
+            maxWidth: 360,
+          }}
+        >
+          Cada candidato tiene su propia sala. Elegí uno para entrar a su video.
+        </p>
+        {(() => {
+          const invs = sesionDetalle?.invitados ?? [];
+          if (invs.length === 0) {
+            return (
+              <p
+                style={{
+                  fontSize: "var(--font-size-sm)",
+                  color: "rgba(255,255,255,0.4)",
+                  fontStyle: "italic",
+                }}
+              >
+                Aún no hay candidatos en la sesión.
+              </p>
+            );
+          }
+          return (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "var(--space-sm)",
+                width: "100%",
+                maxWidth: 360,
+              }}
+            >
+              {invs.map((inv) => (
+                <button
+                  key={inv.id}
+                  onClick={() => setWatchLocal(String(inv.id))}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "var(--space-sm)",
+                    padding: "var(--space-md)",
+                    background: "rgba(255,255,255,0.06)",
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    borderRadius: "var(--radius-md)",
+                    color: "#fff",
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    fontSize: "var(--font-size-base)",
+                    textAlign: "left",
+                  }}
+                >
+                  <span style={{ fontWeight: "var(--font-weight-bold)" }}>{inv.nombre}</span>
+                  <span
+                    style={{
+                      marginLeft: "auto",
+                      fontSize: "var(--font-size-xs)",
+                      color: "rgba(255,255,255,0.5)",
+                    }}
+                  >
+                    {inv.estado}
+                  </span>
+                </button>
+              ))}
+            </div>
+          );
+        })()}
+      </div>
+    ) : (
+      jitsiEl
+    );
+
   return (
     <div
       style={{
@@ -719,7 +828,7 @@ export default function JoinPage() {
             </div>
           </>
         ) : (
-          <div style={{ flex: 1, overflow: "hidden" }}>{jitsiEl}</div>
+          <div style={{ flex: 1, overflow: "hidden" }}>{supervisorContent}</div>
         )}
 
         {/* Panel lateral — solo supervisores */}
