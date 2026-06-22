@@ -62,7 +62,6 @@ export default function JoinPage() {
   const [fase, setFase] = useState<"sala" | "ended">("sala");
   const [observaciones, setObservaciones] = useState("");
   const [timerSeconds, setTimerSeconds] = useState(0);
-  const [jitsiJoined, setJitsiJoined] = useState(false);
   const [copiadoLink, setCopiadoLink] = useState<Record<number, boolean>>({});
   const [copiadoTodos, setCopiadoTodos] = useState(false);
   const [showInfoPanel, setShowInfoPanel] = useState(false);
@@ -269,7 +268,6 @@ export default function JoinPage() {
   const handleSalir = () => {
     jitsiRef.current?.hangup();
     setFase("ended");
-    setJitsiJoined(false);
     setTimerSeconds(0);
   };
 
@@ -294,7 +292,7 @@ export default function JoinPage() {
   }, [remainingSecs, rendir, token, fase, finalizarCandidato]);
 
   const handleConferenceJoined = useCallback(() => {
-    setJitsiJoined(true);
+    // El proctoring ya no depende de entrar a Jitsi (arranca al rendir la prueba).
   }, []);
 
   const handleParticipantJoined = useCallback(() => {
@@ -324,7 +322,6 @@ export default function JoinPage() {
 
   const handleReadyToClose = useCallback(() => {
     setFase("ended");
-    setJitsiJoined(false);
     setTimerSeconds(0);
   }, []);
 
