@@ -19,6 +19,7 @@ export type EvidenciaJSON = {
 };
 
 export type AlertasFilter = {
+  sesion?: number;
   entrevista?: number;
   participante?: number;
 };

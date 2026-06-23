@@ -10,6 +10,7 @@ import type {
   PruebaCandidato,
 } from "@/features/sesiones";
 import env from "@/config/env";
+import { ALERTAS } from "@/config/constants";
 import { useProctoring } from "@/features/proctoring";
 import { JitsiRoom } from "@/features/supervision";
 import type { JitsiRoomHandle } from "@/features/supervision";
@@ -71,6 +72,8 @@ export default function JoinPage() {
   const [agregandoInvitado, setAgregandoInvitado] = useState(false);
   const [mensajeAgregar, setMensajeAgregar] = useState<string | null>(null);
   const [invitadosExtra, setInvitadosExtra] = useState<InvitadoSesion[]>([]);
+  // Id de Jitsi (no el invitado_id) del candidato remoto, para poder expulsarlo.
+  const [remoteParticipantId, setRemoteParticipantId] = useState<string | null>(null);
   // A quién supervisa el moderador. Viene del ?watch= o se elige en pantalla.
   // El supervisor SIEMPRE entra a la sala de un candidato (inv-{id}); sin esto
   // caería en una sala general sin JWT y Jitsi pediría login (ENABLE_GUESTS=0).
@@ -108,6 +111,7 @@ export default function JoinPage() {
     },
     enabled: !!decoded?.entrevista_id && !!token && !!decoded?.moderator,
     retry: false,
+    refetchInterval: ALERTAS.POLLING_INTERVAL_MS,
   });
 
   // Candidato: UNA sola llamada crea la sesión Y trae la prueba (Capa 3c).
@@ -193,6 +197,7 @@ export default function JoinPage() {
     queryFn: () => fetchWithInvitadoToken<SesionDetalle>(`/sesiones/${sesion!.id}/detalle/`),
     enabled: !!sesion?.id && !!token,
     retry: false,
+    refetchInterval: ALERTAS.POLLING_INTERVAL_MS,
     select: (data) => ({
       ...data,
       invitados: data.invitados.map((inv) => ({
@@ -295,16 +300,25 @@ export default function JoinPage() {
     // El proctoring ya no depende de entrar a Jitsi (arranca al rendir la prueba).
   }, []);
 
-  const handleParticipantJoined = useCallback(() => {
-    // Jitsi manages participant display internally
-  }, []);
+  const handleParticipantJoined = useCallback(
+    (id: string) => {
+      setRemoteParticipantId(id);
+    },
+    [],
+  );
 
   const handleParticipantLeft = useCallback(
     (id: string) => {
+      setRemoteParticipantId((prev) => (prev === id ? null : prev));
       proctoring.onParticipantLeft({ id });
     },
     [proctoring],
   );
+
+  const handleExpulsar = () => {
+    if (!remoteParticipantId) return;
+    jitsiRef.current?.kickParticipant(remoteParticipantId);
+  };
 
   const handleVideoMuteChanged = useCallback(
     (muted: boolean) => {
@@ -741,6 +755,11 @@ export default function JoinPage() {
             >
               ℹ️ Info sesión
             </button>
+          )}
+          {decoded.moderator && remoteParticipantId && (
+            <Button variant="danger" size="sm" onClick={handleExpulsar}>
+              Expulsar
+            </Button>
           )}
           <Button variant="danger" size="sm" onClick={handleSalir}>
             Salir

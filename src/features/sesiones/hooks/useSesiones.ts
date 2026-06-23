@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { sesionesService } from "../services/sesionesService";
 import env from "@/config/env";
+import { ALERTAS } from "@/config/constants";
 import type {
   ActualizarEstadoDto,
   ActualizarObservacionesDto,
@@ -32,6 +33,7 @@ export function useGetSesionDetalle(sesionId: number) {
     queryKey: [...BASE_KEY, sesionId, "detalle"] as const,
     queryFn: () => sesionesService.getSesionDetalle(sesionId),
     enabled: sesionId > 0,
+    refetchInterval: ALERTAS.POLLING_INTERVAL_MS,
   });
 }
 

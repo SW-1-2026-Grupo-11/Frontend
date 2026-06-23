@@ -1,17 +1,23 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { MainLayout } from "@/shared/components/layout";
 import { useCurrentUser, useLogout } from "@/features/auth";
-import { useProgramarEntrevista } from "@/features/interviews";
+import {
+  useProgramarEntrevista,
+  CandidatosList,
+  EmailPreview,
+  LinksGenerados,
+} from "@/features/interviews";
 import type {
   ProgramarEntrevistaDto,
+  ProgramarInvitadoDto,
   InvitadoProgramado,
 } from "@/features/interviews";
 import { useGetUsuarios } from "@/features/usuarios";
 import { useGetPruebas } from "@/features/exams";
+import { Toast } from "@/shared/components/feedback";
 import Card from "@/shared/components/ui/Card";
 import Button from "@/shared/components/ui/Button";
 import Input from "@/shared/components/ui/Input";
-import Badge from "@/shared/components/ui/Badge";
 import Spinner from "@/shared/components/ui/Spinner";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -25,11 +31,16 @@ function fixLink(link: string): string {
   }
 }
 
+// Formato "YYYY-MM-DDTHH:mm" en hora local, para el atributo min del datetime-local.
+function nowAsDatetimeLocal(): string {
+  const now = new Date();
+  const offsetMs = now.getTimezoneOffset() * 60000;
+  return new Date(now.getTime() - offsetMs).toISOString().slice(0, 16);
+}
+
 // ─── Tipos locales ────────────────────────────────────────────────────────────
 
-type Candidato = { nombre: string; email: string };
-
-type Toast = { mensaje: string; tipo: "success" | "error" };
+type ToastState = { mensaje: string; tipo: "success" | "error" };
 
 type ValidationErrors = {
   titulo?: string;
@@ -40,15 +51,6 @@ type ValidationErrors = {
 };
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
-
-const AVATAR_COLORS = [
-  "#1d4ed8",
-  "#7c3aed",
-  "#0891b2",
-  "#be185d",
-  "#15803d",
-  "#b45309",
-];
 
 const DURACION_OPTIONS = [
   { value: 30, label: "30 minutos" },
@@ -103,7 +105,7 @@ export default function SesionNuevaPage() {
   const [duracionMinutos, setDuracionMinutos] = useState<number | null>(null);
   const [evaluadorId, setEvaluadorId] = useState<number | null>(null);
   const [observaciones, setObservaciones] = useState("");
-  const [candidatos, setCandidatos] = useState<Candidato[]>([]);
+  const [candidatos, setCandidatos] = useState<ProgramarInvitadoDto[]>([]);
   const [nuevoNombre, setNuevoNombre] = useState("");
   const [nuevoEmail, setNuevoEmail] = useState("");
   const [linkSupervisor, setLinkSupervisor] = useState<string | null>(null);
@@ -116,7 +118,7 @@ export default function SesionNuevaPage() {
   const [copiadoTodosNueva, setCopiadoTodosNueva] = useState(false);
   const [enviado, setEnviado] = useState(false);
   const [copiado, setCopiado] = useState(false);
-  const [toast, setToast] = useState<Toast | null>(null);
+  const [toast, setToast] = useState<ToastState | null>(null);
   const [errores, setErrores] = useState<ValidationErrors>({});
 
   const emailPreviewRef = useRef<HTMLDivElement>(null);
@@ -129,13 +131,6 @@ export default function SesionNuevaPage() {
 
   // ── Mutaciones ──
   const programarMutation = useProgramarEntrevista();
-
-  // ── Auto-dismiss del toast ──
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 4000);
-    return () => clearTimeout(t);
-  }, [toast]);
 
   // ── Datos derivados ──
   const evaluador = usuarios?.find((u) => u.id === evaluadorId);
@@ -170,6 +165,8 @@ export default function SesionNuevaPage() {
     if (!pruebaId) nuevos.prueba = "Selecciona una prueba del banco";
     if (!evaluadorId) nuevos.evaluador = "Selecciona un evaluador";
     if (!fechaProgramada) nuevos.fecha = "La fecha es requerida";
+    else if (new Date(fechaProgramada) <= new Date())
+      nuevos.fecha = "La fecha debe ser futura";
     if (candidatos.length === 0)
       nuevos.candidatos = "Agrega al menos un candidato";
     setErrores(nuevos);
@@ -250,25 +247,12 @@ export default function SesionNuevaPage() {
     <MainLayout userName={user?.username} onLogout={logout}>
       {/* ── Toast ── */}
       {toast && (
-        <div
-          style={{
-            position: "fixed",
-            top: "var(--space-lg)",
-            right: "var(--space-lg)",
-            zIndex: 1000,
-            backgroundColor:
-              toast.tipo === "success"
-                ? "var(--color-success)"
-                : "var(--color-danger)",
-            color: "#fff",
-            padding: "var(--space-sm) var(--space-lg)",
-            borderRadius: "var(--radius-md)",
-            fontSize: "var(--font-size-base)",
-            boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
-            maxWidth: "420px",
-          }}
-        >
-          {toast.mensaje}
+        <div style={{ position: "fixed", top: "var(--space-lg)", right: "var(--space-lg)", zIndex: 1000 }}>
+          <Toast
+            message={toast.mensaje}
+            variant={toast.tipo}
+            onDismiss={() => setToast(null)}
+          />
         </div>
       )}
 
@@ -299,6 +283,7 @@ export default function SesionNuevaPage() {
       <div
         style={{
           display: "flex",
+          flexWrap: "wrap",
           gap: "var(--space-xl)",
           alignItems: "flex-start",
         }}
@@ -306,7 +291,7 @@ export default function SesionNuevaPage() {
         {/* ─ Columna izquierda ─ */}
         <div
           style={{
-            flex: 1,
+            flex: "2 1 420px",
             display: "flex",
             flexDirection: "column",
             gap: "var(--space-lg)",
@@ -386,6 +371,7 @@ export default function SesionNuevaPage() {
                   <input
                     type="datetime-local"
                     value={fechaProgramada}
+                    min={nowAsDatetimeLocal()}
                     onChange={(e) => {
                       setFechaProgramada(e.target.value);
                       if (errores.fecha)
@@ -526,187 +512,23 @@ export default function SesionNuevaPage() {
           </Card>
 
           {/* ── SECCIÓN 2: Candidatos invitados ── */}
-          <Card title="Candidatos invitados">
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "var(--space-md)",
-              }}
-            >
-              {/* Error global de candidatos */}
-              {errores.candidatos && (
-                <div
-                  style={{
-                    padding: "var(--space-sm) var(--space-md)",
-                    backgroundColor: "rgba(239,68,68,0.1)",
-                    border: "1px solid rgba(239,68,68,0.3)",
-                    borderRadius: "var(--radius-md)",
-                    fontSize: "var(--font-size-sm)",
-                    color: "var(--color-danger)",
-                  }}
-                >
-                  {errores.candidatos}
-                </div>
-              )}
-
-              {/* Lista */}
-              {candidatos.length === 0 ? (
-                <div
-                  style={{
-                    textAlign: "center",
-                    padding: "var(--space-lg)",
-                    color: "var(--color-text-muted)",
-                    fontSize: "var(--font-size-sm)",
-                    fontStyle: "italic",
-                  }}
-                >
-                  No hay candidatos agregados aún
-                </div>
-              ) : (
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "var(--space-sm)",
-                  }}
-                >
-                  {candidatos.map((candidato, i) => {
-                    const iniciales = candidato.nombre
-                      .split(" ")
-                      .map((n) => n[0] ?? "")
-                      .join("")
-                      .slice(0, 2)
-                      .toUpperCase();
-                    const color =
-                      AVATAR_COLORS[i % AVATAR_COLORS.length] ?? "#1d4ed8";
-
-                    return (
-                      <div
-                        key={i}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "var(--space-sm)",
-                          padding: "var(--space-sm) var(--space-md)",
-                          backgroundColor: "var(--color-background)",
-                          borderRadius: "var(--radius-md)",
-                          border: "1px solid var(--color-border)",
-                        }}
-                      >
-                        {/* Avatar */}
-                        <div
-                          style={{
-                            width: "36px",
-                            height: "36px",
-                            borderRadius: "var(--radius-full)",
-                            backgroundColor: color,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: "var(--font-size-sm)",
-                            fontWeight: "var(--font-weight-bold)",
-                            color: "#fff",
-                            flexShrink: 0,
-                          }}
-                        >
-                          {iniciales}
-                        </div>
-
-                        {/* Nombre y email */}
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div
-                            style={{
-                              fontSize: "var(--font-size-base)",
-                              fontWeight: "var(--font-weight-medium)",
-                              color: "var(--color-text)",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            {candidato.nombre}
-                          </div>
-                          <div
-                            style={{
-                              fontSize: "var(--font-size-sm)",
-                              color: "var(--color-text-muted)",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            {candidato.email}
-                          </div>
-                        </div>
-
-                        <Badge variant="neutral">Pendiente</Badge>
-
-                        <button
-                          onClick={() => handleEliminarCandidato(i)}
-                          title="Eliminar candidato"
-                          style={{
-                            background: "none",
-                            border: "none",
-                            cursor: "pointer",
-                            color: "var(--color-text-muted)",
-                            fontSize: "1.2rem",
-                            padding: "var(--space-xs)",
-                            lineHeight: 1,
-                            borderRadius: "var(--radius-sm)",
-                            flexShrink: 0,
-                          }}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Fila para agregar */}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr auto",
-                  gap: "var(--space-sm)",
-                  alignItems: "flex-end",
-                  paddingTop: "var(--space-sm)",
-                  borderTop: "1px solid var(--color-border)",
-                }}
-              >
-                <Input
-                  placeholder="Nombre del candidato"
-                  value={nuevoNombre}
-                  onChange={(e) => setNuevoNombre(e.target.value)}
-                />
-                <Input
-                  type="email"
-                  placeholder="email@ejemplo.com"
-                  value={nuevoEmail}
-                  onChange={(e) => setNuevoEmail(e.target.value)}
-                />
-                <Button
-                  variant="secondary"
-                  disabled={
-                    !nuevoNombre.trim() || !EMAIL_REGEX.test(nuevoEmail.trim())
-                  }
-                  onClick={handleAgregarCandidato}
-                >
-                  + Agregar
-                </Button>
-              </div>
-            </div>
-          </Card>
+          <CandidatosList
+            candidatos={candidatos}
+            error={errores.candidatos}
+            nuevoNombre={nuevoNombre}
+            nuevoEmail={nuevoEmail}
+            onNombreChange={setNuevoNombre}
+            onEmailChange={setNuevoEmail}
+            onAgregar={handleAgregarCandidato}
+            onEliminar={handleEliminarCandidato}
+          />
 
         </div>
 
         {/* ─ Columna derecha ─ */}
         <div
           style={{
-            width: "320px",
-            flexShrink: 0,
+            flex: "1 1 320px",
             display: "flex",
             flexDirection: "column",
             gap: "var(--space-lg)",
@@ -797,253 +619,25 @@ export default function SesionNuevaPage() {
 
           {/* ── SECCIÓN 4b: Links generados ── */}
           {enviado && invitadosLinks.length > 0 && (
-            <Card title="Links generados">
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "var(--space-xs)",
-                }}
-              >
-                {/* Botón copiar todos */}
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "flex-end",
-                    marginBottom: 4,
-                  }}
-                >
-                  <Button
-                    variant="secondary"
-                    onClick={handleCopiarTodosNueva}
-                    style={{
-                      fontSize: "var(--font-size-xs)",
-                      padding: "4px 12px",
-                    }}
-                  >
-                    {copiadoTodosNueva ? "✓ Copiado" : "Copiar todos"}
-                  </Button>
-                </div>
-
-                {/* Fila por invitado */}
-                {invitadosLinks.map((inv) => (
-                  <div
-                    key={inv.id}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr auto auto",
-                      alignItems: "center",
-                      gap: "var(--space-sm)",
-                      padding: "6px 0",
-                      borderBottom: "1px solid var(--color-border)",
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: "var(--font-size-sm)",
-                        fontWeight: "var(--font-weight-medium)",
-                        color: "var(--color-text)",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {inv.nombre}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: "var(--font-size-xs)",
-                        color: "var(--color-text-muted)",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                        maxWidth: 130,
-                      }}
-                    >
-                      {inv.link_invitacion ? (
-                        inv.link_invitacion.length > 30 ? (
-                          `${inv.link_invitacion.slice(0, 30)}…`
-                        ) : (
-                          inv.link_invitacion
-                        )
-                      ) : (
-                        <em>No disponible</em>
-                      )}
-                    </span>
-                    <button
-                      disabled={!inv.link_invitacion}
-                      onClick={() =>
-                        inv.link_invitacion &&
-                        handleCopiarInvitadoNueva(inv.id, inv.link_invitacion)
-                      }
-                      style={{
-                        padding: "3px 10px",
-                        background: "transparent",
-                        color: inv.link_invitacion
-                          ? "var(--color-primary)"
-                          : "var(--color-text-muted)",
-                        border: `1px solid ${inv.link_invitacion ? "var(--color-primary)" : "var(--color-border)"}`,
-                        borderRadius: "var(--radius-sm)",
-                        cursor: inv.link_invitacion ? "pointer" : "default",
-                        fontSize: "var(--font-size-xs)",
-                        fontFamily: "inherit",
-                        flexShrink: 0,
-                      }}
-                    >
-                      {copiadoInvitadoNueva[inv.id] ? "✓ Copiado" : "Copiar"}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </Card>
+            <LinksGenerados
+              invitados={invitadosLinks}
+              copiadoPorInvitado={copiadoInvitadoNueva}
+              copiadoTodos={copiadoTodosNueva}
+              onCopiarInvitado={handleCopiarInvitadoNueva}
+              onCopiarTodos={handleCopiarTodosNueva}
+            />
           )}
 
           {/* ── SECCIÓN 5: Vista previa del email ── */}
-          <div ref={emailPreviewRef}>
-            <Card title="Vista previa del email">
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "var(--space-sm)",
-                }}
-              >
-                {/* Cabecera */}
-                <div
-                  style={{
-                    fontSize: "var(--font-size-sm)",
-                    color: "var(--color-text-muted)",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "3px",
-                  }}
-                >
-                  <div
-                    style={{
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    <span style={{ fontWeight: "var(--font-weight-medium)" }}>
-                      Para:{" "}
-                    </span>
-                    {candidatos.length > 0 ? (
-                      candidatos.map((c) => c.email).join(", ")
-                    ) : (
-                      <span style={{ fontStyle: "italic" }}>
-                        candidatos por agregar...
-                      </span>
-                    )}
-                  </div>
-                  <div>
-                    <span style={{ fontWeight: "var(--font-weight-medium)" }}>
-                      De:{" "}
-                    </span>
-                    evalsecure@empresa.com
-                  </div>
-                  <div>
-                    <span style={{ fontWeight: "var(--font-weight-medium)" }}>
-                      Asunto:{" "}
-                    </span>
-                    Invitación a evaluación — EvalSecure
-                  </div>
-                </div>
-
-                <hr
-                  style={{
-                    border: "none",
-                    borderTop: "1px solid var(--color-border)",
-                    margin: 0,
-                  }}
-                />
-
-                {/* Cuerpo */}
-                <div
-                  style={{
-                    fontSize: "var(--font-size-sm)",
-                    color: "var(--color-text)",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "var(--space-sm)",
-                    lineHeight: 1.6,
-                  }}
-                >
-                  <p style={{ margin: 0 }}>Hola,</p>
-                  <p style={{ margin: 0 }}>
-                    Has sido invitado/a a participar en una evaluación a través
-                    de EvalSecure.
-                  </p>
-
-                  {/* Detalles de sesión */}
-                  <div
-                    style={{
-                      padding: "var(--space-sm)",
-                      backgroundColor: "var(--color-background)",
-                      borderRadius: "var(--radius-md)",
-                      border: "1px solid var(--color-border)",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "3px",
-                    }}
-                  >
-                    <div>
-                      <strong>Sesión:</strong> {titulo || <em>Sin título</em>}
-                    </div>
-                    <div>
-                      <strong>Fecha:</strong>{" "}
-                      {fechaProgramada
-                        ? new Date(fechaProgramada).toLocaleString("es-ES", {
-                            dateStyle: "medium",
-                            timeStyle: "short",
-                          })
-                        : "Por definir"}
-                    </div>
-                    <div>
-                      <strong>Duración:</strong>{" "}
-                      {duracionMinutos != null
-                        ? `${duracionMinutos} minutos`
-                        : pruebaDuracion
-                          ? `${pruebaDuracion} minutos (de la prueba)`
-                          : "Tiempo de la prueba"}
-                    </div>
-                    {evaluador && (
-                      <div>
-                        <strong>Evaluador:</strong> {evaluador.first_name}{" "}
-                        {evaluador.last_name}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Botón de acceso (decorativo) */}
-                  <div
-                    style={{
-                      padding: "var(--space-sm) var(--space-md)",
-                      backgroundColor: "var(--color-primary)",
-                      color: "#fff",
-                      borderRadius: "var(--radius-md)",
-                      textAlign: "center",
-                      fontWeight: "var(--font-weight-medium)",
-                    }}
-                  >
-                    Ingresar a la evaluación →
-                  </div>
-
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: "0.7rem",
-                      color: "var(--color-text-muted)",
-                      fontStyle: "italic",
-                    }}
-                  >
-                    Esta sesión está sujeta a monitoreo remoto por parte de
-                    EvalSecure.
-                  </p>
-                </div>
-              </div>
-            </Card>
-          </div>
+          <EmailPreview
+            ref={emailPreviewRef}
+            candidatos={candidatos}
+            titulo={titulo}
+            fechaProgramada={fechaProgramada}
+            duracionMinutos={duracionMinutos}
+            pruebaDuracion={pruebaDuracion}
+            evaluador={evaluador}
+          />
 
           {/* ── SECCIÓN 6: Acciones ── */}
           <Card>
