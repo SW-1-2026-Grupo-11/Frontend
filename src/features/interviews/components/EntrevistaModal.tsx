@@ -26,10 +26,18 @@ type FormState = {
 
 type FormErrors = Partial<Record<keyof FormState, string>>;
 
-function validateForm(state: FormState): FormErrors {
+const MARGEN_GRACIA_MS = 5 * 60 * 1000;
+
+function validateForm(state: FormState, isEdit: boolean): FormErrors {
   const errors: FormErrors = {};
   if (!state.titulo.trim()) errors.titulo = ENTREVISTAS.VALIDATION_REQUIRED;
   if (!state.descripcion.trim()) errors.descripcion = ENTREVISTAS.VALIDATION_REQUIRED;
+  if (state.fecha_programada) {
+    const fecha = new Date(state.fecha_programada);
+    if (fecha.getTime() < Date.now() - MARGEN_GRACIA_MS) {
+      errors.fecha_programada = "La fecha debe ser futura";
+    }
+  }
   return errors;
 }
 
@@ -81,7 +89,7 @@ export default function EntrevistaModal({ onClose, entrevista }: EntrevistaModal
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const errors = validateForm(form);
+    const errors = validateForm(form, isEdit);
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
       return;
@@ -216,6 +224,12 @@ export default function EntrevistaModal({ onClose, entrevista }: EntrevistaModal
               }}
             />
           </div>
+
+          {formErrors.fecha_programada && (
+            <span style={{ fontSize: "var(--font-size-sm)", color: "var(--color-danger)" }}>
+              {formErrors.fecha_programada}
+            </span>
+          )}
 
           {/* Descripción */}
           <div style={fieldStyle}>

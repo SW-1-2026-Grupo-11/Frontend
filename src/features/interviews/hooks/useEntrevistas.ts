@@ -40,7 +40,7 @@ type UpdateVars = { id: number; dto: UpdateEntrevistaDto };
 export function useUpdateEntrevista() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, dto }: UpdateVars) => entrevistasService.updateEntrevista(id, dto),
+    mutationFn: ({ id, dto }: UpdateVars) => entrevistasService.patchEntrevista(id, dto),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: BASE_KEY });
     },

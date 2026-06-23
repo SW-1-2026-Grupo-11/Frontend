@@ -310,7 +310,7 @@ export default function EntrevistaDetailDrawer({
                     {(() => {
                       const ses = sesionPorInvitado.get(inv.id);
                       if (!ses) return null;
-                      return (
+                      return ses.nota_final != null ? (
                         <button
                           onClick={() => {
                             onClose();
@@ -319,9 +319,9 @@ export default function EntrevistaDetailDrawer({
                           style={{
                             padding: "4px 10px",
                             background: "transparent",
-                            border: "1px solid var(--color-primary)",
+                            border: "1px solid var(--color-success)",
                             borderRadius: "var(--radius-sm)",
-                            color: "var(--color-primary)",
+                            color: "var(--color-success)",
                             cursor: "pointer",
                             fontSize: "var(--font-size-xs)",
                             fontFamily: "inherit",
@@ -329,9 +329,9 @@ export default function EntrevistaDetailDrawer({
                             whiteSpace: "nowrap",
                           }}
                         >
-                          {ses.nota_final != null ? `Nota ${Number(ses.nota_final)} · ver` : "Ver sesión"}
+                          Nota {Number(ses.nota_final)} · Ver informe
                         </button>
-                      );
+                      ) : null;
                     })()}
                   </div>
 
