@@ -460,28 +460,6 @@ export default function SesionDetallePage() {
                 </div>
               )}
             </div>
-
-            {/* Jitsi snapshot */}
-            <div>
-              <p style={metaLabel}>JITSI MEETING SNAPSHOT</p>
-              <div style={{
-                marginTop: 6,
-                height: 80,
-                background: "#1e293b",
-                borderRadius: 8,
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 4,
-              }}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="1.5">
-                  <rect x="2" y="5" width="20" height="14" rx="2" />
-                  <path d="M16 10l4-2v8l-4-2v-4z" />
-                </svg>
-                <span style={{ fontSize: 10, color: "#64748b" }}>Sin grabación de video</span>
-              </div>
-            </div>
           </div>
         </div>
 
