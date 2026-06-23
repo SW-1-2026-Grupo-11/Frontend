@@ -131,7 +131,8 @@ export default function SesionNuevaPage() {
   const emailPreviewRef = useRef<HTMLDivElement>(null);
 
   // ── Carga de datos ──
-  const { data: usuarios, isLoading: loadingUsuarios } = useGetUsuarios();
+  const { data: usuariosPage, isLoading: loadingUsuarios } = useGetUsuarios({ page: 1 });
+  const usuarios = usuariosPage?.results;
   const { data: pruebas } = useGetPruebas();
   // Duración por defecto = la de la prueba elegida (fuente de verdad).
   const pruebaDuracion = (pruebas ?? []).find((p) => p.id === pruebaId)?.duracion_minutos ?? null;

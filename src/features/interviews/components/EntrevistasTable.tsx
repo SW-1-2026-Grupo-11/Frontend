@@ -1,33 +1,35 @@
-import { Badge, Button, Spinner } from "@/shared/components/ui";
+import { Badge, Button, Pagination, Spinner, Table, TableHead, Th, Td } from "@/shared/components/ui";
 import { ENTREVISTAS } from "@/config/constants";
 import { useGetEntrevistas, useDeleteEntrevista } from "../hooks/useEntrevistas";
 import type { Entrevista, EstadoEntrevista } from "../types";
 
+export type EntrevistasSortField = "titulo" | "fecha_programada";
+export type SortDirection = "asc" | "desc";
+export type SortState = { field: EntrevistasSortField; direction: SortDirection } | null;
+
 type EntrevistasTableProps = {
   estadoFilter: EstadoEntrevista | null;
+  page: number;
+  onPageChange: (page: number) => void;
+  search: string;
+  sort: SortState;
+  onSortChange: (field: EntrevistasSortField) => void;
   onView: (entrevista: Entrevista) => void;
   onEdit: (entrevista: Entrevista) => void;
 };
 
 type BadgeVariant = "success" | "warning" | "danger" | "info" | "neutral";
 
-const thStyle: React.CSSProperties = {
-  padding: "var(--space-sm) var(--space-md)",
-  textAlign: "left",
-  fontSize: "var(--font-size-sm)",
-  fontWeight: "var(--font-weight-medium)",
-  color: "var(--color-text-muted)",
-  borderBottom: "1px solid var(--color-border)",
+const ellipsisStyle: React.CSSProperties = {
+  display: "block",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
   whiteSpace: "nowrap",
 };
 
-const tdStyle: React.CSSProperties = {
-  padding: "var(--space-sm) var(--space-md)",
-  fontSize: "var(--font-size-sm)",
-  color: "var(--color-text)",
-  borderBottom: "1px solid var(--color-border)",
-  verticalAlign: "middle",
-};
+function sortDirectionFor(field: EntrevistasSortField, sort: SortState) {
+  return sort?.field === field ? sort.direction : null;
+}
 
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
@@ -38,8 +40,23 @@ function formatDate(iso: string | null): string {
   });
 }
 
-export default function EntrevistasTable({ estadoFilter, onView, onEdit }: EntrevistasTableProps) {
-  const { data: entrevistas, isLoading, isError } = useGetEntrevistas();
+export default function EntrevistasTable({
+  estadoFilter,
+  page,
+  onPageChange,
+  search,
+  sort,
+  onSortChange,
+  onView,
+  onEdit,
+}: EntrevistasTableProps) {
+  const ordering = sort ? `${sort.direction === "desc" ? "-" : ""}${sort.field}` : undefined;
+  const { data, isLoading, isError } = useGetEntrevistas({
+    page,
+    search: search || undefined,
+    ordering,
+  });
+  const entrevistas = data?.results;
   const deleteEntrevista = useDeleteEntrevista();
 
   if (isLoading) {
@@ -79,7 +96,7 @@ export default function EntrevistasTable({ estadoFilter, onView, onEdit }: Entre
           fontSize: "var(--font-size-base)",
         }}
       >
-        {ENTREVISTAS.EMPTY}
+        {search ? ENTREVISTAS.EMPTY_SEARCH : ENTREVISTAS.EMPTY}
       </p>
     );
   }
@@ -93,65 +110,42 @@ export default function EntrevistasTable({ estadoFilter, onView, onEdit }: Entre
   const isMutating = deleteEntrevista.isPending;
 
   return (
-    <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead style={{ backgroundColor: "var(--color-surface-hover)" }}>
-          <tr>
-            <th style={thStyle}>{ENTREVISTAS.COL_TITULO}</th>
-            <th style={{ ...thStyle, maxWidth: "240px" }}>{ENTREVISTAS.COL_DESCRIPCION}</th>
-            <th style={thStyle}>{ENTREVISTAS.COL_ESTADO}</th>
-            <th style={thStyle}>{ENTREVISTAS.COL_FECHA}</th>
-            <th style={{ ...thStyle, textAlign: "right" }}>{ENTREVISTAS.COL_ACCIONES}</th>
-          </tr>
-        </thead>
+    <div>
+      <Table>
+        <TableHead>
+          <Th sortDirection={sortDirectionFor("titulo", sort)} onClick={() => onSortChange("titulo")}>
+            {ENTREVISTAS.COL_TITULO}
+          </Th>
+          <Th>{ENTREVISTAS.COL_DESCRIPCION}</Th>
+          <Th>{ENTREVISTAS.COL_ESTADO}</Th>
+          <Th
+            sortDirection={sortDirectionFor("fecha_programada", sort)}
+            onClick={() => onSortChange("fecha_programada")}
+          >
+            {ENTREVISTAS.COL_FECHA}
+          </Th>
+          <Th align="right">{ENTREVISTAS.COL_ACCIONES}</Th>
+        </TableHead>
         <tbody>
           {filtered.map((entrevista) => (
             <tr key={entrevista.id}>
-              <td
-                style={{
-                  ...tdStyle,
-                  fontWeight: "var(--font-weight-medium)",
-                  maxWidth: "220px",
-                }}
-              >
-                <span
-                  style={{
-                    display: "block",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                  title={entrevista.titulo}
-                >
+              <Td style={{ fontWeight: "var(--font-weight-medium)", maxWidth: "220px" }}>
+                <span style={ellipsisStyle} title={entrevista.titulo}>
                   {entrevista.titulo}
                 </span>
-              </td>
-              <td style={{ ...tdStyle, maxWidth: "240px", color: "var(--color-text-muted)" }}>
-                <span
-                  style={{
-                    display: "block",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                  title={entrevista.descripcion}
-                >
+              </Td>
+              <Td muted style={{ maxWidth: "240px" }}>
+                <span style={ellipsisStyle} title={entrevista.descripcion}>
                   {entrevista.descripcion}
                 </span>
-              </td>
-              <td style={tdStyle}>
-                <Badge
-                  variant={
-                    ENTREVISTAS.ESTADO_BADGE[entrevista.estado_efectivo] as BadgeVariant
-                  }
-                >
+              </Td>
+              <Td>
+                <Badge variant={ENTREVISTAS.ESTADO_BADGE[entrevista.estado_efectivo] as BadgeVariant}>
                   {ENTREVISTAS.ESTADO_LABELS[entrevista.estado_efectivo]}
                 </Badge>
-              </td>
-              <td style={{ ...tdStyle, color: "var(--color-text-muted)" }}>
-                {formatDate(entrevista.fecha_programada)}
-              </td>
-              <td style={{ ...tdStyle, textAlign: "right" }}>
+              </Td>
+              <Td muted>{formatDate(entrevista.fecha_programada)}</Td>
+              <Td align="right">
                 <div
                   style={{
                     display: "inline-flex",
@@ -184,11 +178,20 @@ export default function EntrevistasTable({ estadoFilter, onView, onEdit }: Entre
                     {ENTREVISTAS.BTN_ELIMINAR}
                   </Button>
                 </div>
-              </td>
+              </Td>
             </tr>
           ))}
         </tbody>
-      </table>
+      </Table>
+      {!estadoFilter && (
+        <Pagination
+          page={page}
+          count={data?.count ?? 0}
+          hasNext={Boolean(data?.next)}
+          hasPrevious={Boolean(data?.previous)}
+          onPageChange={onPageChange}
+        />
+      )}
     </div>
   );
 }

@@ -44,7 +44,8 @@ export default function HomePage() {
   const navigate = useNavigate();
   const { data: user } = useCurrentUser();
   const logout = useLogout();
-  const { data: entrevistas, isLoading } = useGetEntrevistas();
+  const { data: entrevistasPage, isLoading } = useGetEntrevistas({ page: 1 });
+  const entrevistas = entrevistasPage?.results;
 
   const [loadingId, setLoadingId] = useState<number | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);

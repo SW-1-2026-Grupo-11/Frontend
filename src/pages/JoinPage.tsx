@@ -2,13 +2,14 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearch } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useJwtDecode } from "@/shared/hooks/useJwtDecode";
-import { useActualizarObservaciones, useFinalizarCandidato, RendirPrueba } from "@/features/sesiones";
-import type {
-  Sesion,
-  SesionDetalle,
-  InvitadoSesion,
-  PruebaCandidato,
+import {
+  useActualizarObservaciones,
+  useAgregarInvitadoPublico,
+  useFinalizarCandidato,
+  useRendir,
+  RendirPrueba,
 } from "@/features/sesiones";
+import type { Sesion, SesionDetalle, InvitadoSesion } from "@/features/sesiones";
 import env from "@/config/env";
 import { ALERTAS } from "@/config/constants";
 import { useProctoring } from "@/features/proctoring";
@@ -69,7 +70,6 @@ export default function JoinPage() {
   const [copiadoSupervisor, setCopiadoSupervisor] = useState(false);
   const [nuevoNombre, setNuevoNombre] = useState("");
   const [nuevoEmail, setNuevoEmail] = useState("");
-  const [agregandoInvitado, setAgregandoInvitado] = useState(false);
   const [mensajeAgregar, setMensajeAgregar] = useState<string | null>(null);
   const [invitadosExtra, setInvitadosExtra] = useState<InvitadoSesion[]>([]);
   // Id de Jitsi (no el invitado_id) del candidato remoto, para poder expulsarlo.
@@ -115,57 +115,16 @@ export default function JoinPage() {
   });
 
   // Candidato: UNA sola llamada crea la sesión Y trae la prueba (Capa 3c).
-  // POST /sesiones/rendir/ {token} -> { sesion, prueba }. Fetch plano + estado
-  // local: sin React Query, sin 2 pasos acoplados, nada que se desincronice.
-  const [rendir, setRendir] = useState<{ sesion: Sesion; prueba: PruebaCandidato | null } | null>(
-    null,
-  );
-  const [rendirError, setRendirError] = useState<string | null>(null);
+  // POST /sesiones/rendir/ {token} -> { sesion, prueba }, vía useMutation (sin
+  // fetch/AbortController/estado a mano: useMutation ya da loading/error/data).
+  const rendirMutation = useRendir();
   const rendirFiredRef = useRef(false);
-
-  const cargarRendir = useCallback(() => {
-    if (!token) return;
-    setRendirError(null);
-    setRendir(null);
-    const ctrl = new AbortController();
-    const timeout = setTimeout(() => ctrl.abort(), 12000);
-    fetch(`${env.API_URL}/sesiones/rendir/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token }),
-      signal: ctrl.signal,
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          let detail = `Error ${res.status}`;
-          try {
-            const e = (await res.json()) as { detail?: string };
-            if (e?.detail) detail = e.detail;
-          } catch {
-            /* sin cuerpo JSON */
-          }
-          throw new Error(detail);
-        }
-        return (await res.json()) as { sesion: Sesion; prueba: PruebaCandidato | null };
-      })
-      .then((data) => setRendir(data))
-      .catch((err: unknown) => {
-        const msg =
-          err instanceof DOMException && err.name === "AbortError"
-            ? "El servidor no respondió (timeout 12s). Avisa al evaluador."
-            : err instanceof Error
-              ? err.message
-              : "No se pudo cargar tu prueba.";
-        setRendirError(msg);
-      })
-      .finally(() => clearTimeout(timeout));
-  }, [token]);
 
   useEffect(() => {
     if (rendirFiredRef.current || !decoded || decoded.moderator || !token) return;
     rendirFiredRef.current = true;
-    cargarRendir();
-  }, [decoded, token, cargarRendir]);
+    rendirMutation.mutate(token);
+  }, [decoded, token, rendirMutation]);
 
   // JWT de Jitsi: SOLO si el dominio es propio (la pública meet.jit.si no lo usa
   // y rechazaría un token nuestro). Candidato → su sala; supervisor → la sala
@@ -190,7 +149,7 @@ export default function JoinPage() {
   }, [selfHostedJitsi, decoded, token, watchInvitadoId]);
 
   // Sesión efectiva: candidato = la de /rendir/; supervisor = la consultada.
-  const sesion = decoded?.moderator ? sesionSupervisor : rendir?.sesion ?? undefined;
+  const sesion = decoded?.moderator ? sesionSupervisor : rendirMutation.data?.sesion ?? undefined;
 
   const { data: sesionDetalle } = useQuery<SesionDetalle>({
     queryKey: ["sesion-detalle-publica", sesion?.id, token],
@@ -210,6 +169,7 @@ export default function JoinPage() {
   // ── Mutaciones ──
   const actualizarObsMutation = useActualizarObservaciones();
   const finalizarCandidato = useFinalizarCandidato();
+  const agregarInvitadoMutation = useAgregarInvitadoPublico();
 
   // ── Proctoring (solo candidatos) ──
   // Se activa MIENTRAS rinde la prueba (no depende de entrar a Jitsi): apenas la
@@ -220,7 +180,7 @@ export default function JoinPage() {
     entrevistaId: decoded?.entrevista_id ?? 0,
     participanteId: decoded?.invitado_id ?? 0,
     sessionId: sesion ? String(sesion.id) : undefined,
-    enabled: fase === "sala" && !!rendir && !decoded?.moderator,
+    enabled: fase === "sala" && !!rendirMutation.data && !decoded?.moderator,
   });
 
   // (El invitado se marca "aceptado" automáticamente dentro del endpoint `ingresar`.)
@@ -241,8 +201,8 @@ export default function JoinPage() {
   // Deadline del candidato (la sesión de /rendir/ trae `deadline`). El supervisor
   // no tiene countdown propio.
   const deadlineMs =
-    !decoded?.moderator && rendir?.sesion?.deadline
-      ? new Date(rendir.sesion.deadline).getTime()
+    !decoded?.moderator && rendirMutation.data?.sesion?.deadline
+      ? new Date(rendirMutation.data.sesion.deadline).getTime()
       : null;
   const remainingSecs =
     deadlineMs !== null ? Math.max(0, Math.round((deadlineMs - nowMs) / 1000)) : null;
@@ -277,7 +237,7 @@ export default function JoinPage() {
   };
 
   const handleReintentarIngreso = () => {
-    cargarRendir();
+    if (token) rendirMutation.mutate(token);
   };
 
   // ── Auto-entrega: al llegar a 0 el countdown, se entrega la prueba sola ──
@@ -287,14 +247,14 @@ export default function JoinPage() {
   useEffect(() => {
     if (autoEntregaRef.current) return;
     if (remainingSecs === null || remainingSecs > 0) return;
-    const sesionId = rendir?.sesion?.id;
+    const sesionId = rendirMutation.data?.sesion?.id;
     if (!sesionId || !token || fase !== "sala") return;
     autoEntregaRef.current = true;
     finalizarCandidato.mutate(
       { sesionId, token },
       { onSettled: () => handleSalir() },
     );
-  }, [remainingSecs, rendir, token, fase, finalizarCandidato]);
+  }, [remainingSecs, rendirMutation.data, token, fase, finalizarCandidato]);
 
   const handleConferenceJoined = useCallback(() => {
     // El proctoring ya no depende de entrar a Jitsi (arranca al rendir la prueba).
@@ -364,40 +324,32 @@ export default function JoinPage() {
     });
   };
 
-  const handleAgregarInvitado = async () => {
+  const handleAgregarInvitado = () => {
     const nombre = nuevoNombre.trim();
     const email = nuevoEmail.trim();
     if (!nombre || !EMAIL_REGEX.test(email) || !sesion?.id) return;
 
-    setAgregandoInvitado(true);
     setMensajeAgregar(null);
-
-    try {
-      const res = await fetch(`${env.API_URL}/sesiones/${sesion.id}/agregar-invitado/`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
+    agregarInvitadoMutation.mutate(
+      { sesionId: sesion.id, token, dto: { nombre, email } },
+      {
+        onSuccess: (nuevo) => {
+          const nuevoFixed: InvitadoSesion = {
+            ...nuevo,
+            link_invitacion: nuevo.link_invitacion ? fixLink(nuevo.link_invitacion) : nuevo.link_invitacion,
+          };
+          setInvitadosExtra((prev) => [...prev, nuevoFixed]);
+          setNuevoNombre("");
+          setNuevoEmail("");
+          setMensajeAgregar("✓ Invitado agregado");
+          setTimeout(() => setMensajeAgregar(null), 2000);
         },
-        body: JSON.stringify({ nombre, email }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const nuevo = (await res.json()) as InvitadoSesion;
-      const nuevoFixed: InvitadoSesion = {
-        ...nuevo,
-        link_invitacion: nuevo.link_invitacion ? fixLink(nuevo.link_invitacion) : nuevo.link_invitacion,
-      };
-      setInvitadosExtra((prev) => [...prev, nuevoFixed]);
-      setNuevoNombre("");
-      setNuevoEmail("");
-      setMensajeAgregar("✓ Invitado agregado");
-      setTimeout(() => setMensajeAgregar(null), 2000);
-    } catch {
-      setMensajeAgregar("Error al agregar invitado");
-      setTimeout(() => setMensajeAgregar(null), 3000);
-    } finally {
-      setAgregandoInvitado(false);
-    }
+        onError: () => {
+          setMensajeAgregar("Error al agregar invitado");
+          setTimeout(() => setMensajeAgregar(null), 3000);
+        },
+      },
+    );
   };
 
   const handleCopiarSupervisor = (link: string) => {
@@ -773,14 +725,14 @@ export default function JoinPage() {
         {!decoded.moderator ? (
           <>
             <div style={{ flex: 1, overflow: "hidden", minWidth: 0 }}>
-              {rendir ? (
+              {rendirMutation.data ? (
                 <RendirPrueba
-                  prueba={rendir.prueba}
-                  sesionId={rendir.sesion.id}
+                  prueba={rendirMutation.data.prueba}
+                  sesionId={rendirMutation.data.sesion.id}
                   token={token}
                   onFinalizar={handleSalir}
                 />
-              ) : rendirError ? (
+              ) : rendirMutation.isError ? (
                 <div
                   style={{
                     display: "flex",
@@ -799,7 +751,7 @@ export default function JoinPage() {
                     No se pudo iniciar tu evaluación
                   </p>
                   <p style={{ margin: 0, fontSize: "var(--font-size-sm)", color: "rgba(255,255,255,0.5)" }}>
-                    {rendirError ?? "El enlace puede haber expirado o ser inválido."}
+                    {(rendirMutation.error as Error)?.message ?? "El enlace puede haber expirado o ser inválido."}
                   </p>
                   <p style={{ margin: 0, fontSize: "var(--font-size-xs)", color: "rgba(255,255,255,0.35)" }}>
                     Recarga la página o contacta al evaluador.
@@ -1018,7 +970,7 @@ export default function JoinPage() {
                           placeholder="email@ejemplo.com"
                           value={nuevoEmail}
                           onChange={(e) => setNuevoEmail(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === "Enter") void handleAgregarInvitado(); }}
+                          onKeyDown={(e) => { if (e.key === "Enter") handleAgregarInvitado(); }}
                           style={{
                             backgroundColor: "rgba(255,255,255,0.05)",
                             border: "1px solid rgba(255,255,255,0.1)",
@@ -1033,14 +985,22 @@ export default function JoinPage() {
                           }}
                         />
                         <button
-                          onClick={() => void handleAgregarInvitado()}
-                          disabled={agregandoInvitado || !nuevoNombre.trim() || !EMAIL_REGEX.test(nuevoEmail.trim())}
+                          onClick={handleAgregarInvitado}
+                          disabled={
+                            agregarInvitadoMutation.isPending ||
+                            !nuevoNombre.trim() ||
+                            !EMAIL_REGEX.test(nuevoEmail.trim())
+                          }
                           style={{
-                            backgroundColor: agregandoInvitado ? "rgba(255,255,255,0.1)" : "rgba(99,102,241,0.3)",
+                            backgroundColor: agregarInvitadoMutation.isPending
+                              ? "rgba(255,255,255,0.1)"
+                              : "rgba(99,102,241,0.3)",
                             border: "1px solid rgba(99,102,241,0.4)",
                             borderRadius: "var(--radius-sm)",
-                            color: agregandoInvitado ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.85)",
-                            cursor: agregandoInvitado ? "not-allowed" : "pointer",
+                            color: agregarInvitadoMutation.isPending
+                              ? "rgba(255,255,255,0.4)"
+                              : "rgba(255,255,255,0.85)",
+                            cursor: agregarInvitadoMutation.isPending ? "not-allowed" : "pointer",
                             fontSize: "var(--font-size-xs)",
                             padding: "5px 0",
                             fontFamily: "inherit",
@@ -1049,7 +1009,7 @@ export default function JoinPage() {
                             transition: "background 0.15s",
                           }}
                         >
-                          {agregandoInvitado ? "Agregando..." : "+ Agregar invitado"}
+                          {agregarInvitadoMutation.isPending ? "Agregando..." : "+ Agregar invitado"}
                         </button>
                         {mensajeAgregar && (
                           <p style={{

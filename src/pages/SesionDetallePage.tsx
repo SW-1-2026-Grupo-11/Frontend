@@ -6,9 +6,8 @@ import { useGetSesionDetalle, useActualizarObservaciones, CalificacionSesion, us
 import type { InvitadoSesion } from "@/features/sesiones";
 import { useAlertas } from "@/features/alertas";
 import type { Alerta } from "@/features/alertas";
-import { useGenerarReporte, useGetReportes, useGenerarReporteIA } from "@/features/reportes";
+import { useGenerarReporte, useGetReportes } from "@/features/reportes";
 import type { Reporte } from "@/features/reportes";
-import { getEntrevistaId } from "@/features/reportes";
 import { SESIONES, ALERTAS } from "@/config/constants";
 
 // ─── Local types ──────────────────────────────────────────────────────────────
@@ -93,8 +92,10 @@ function calcDurMinutes(start: string, end: string | null): number {
   return Math.floor((new Date(end).getTime() - new Date(start).getTime()) / 60000);
 }
 
-function cleanResumen(text: string): string {
-  return text.replace(/\nSessionID:\s*[a-f0-9-]{36}/i, "").trim();
+function resolveScores(reporte: Reporte, fallbackAlertas: Alerta[]): { integridad: number; sospecha: number } {
+  const integridad = reporte.puntaje_atencion ?? calcularIntegridad(fallbackAlertas);
+  const sospecha = reporte.puntaje_sospecha ?? Math.max(0, 100 - integridad);
+  return { integridad, sospecha };
 }
 
 // ─── SesionDetallePage ────────────────────────────────────────────────────────
@@ -120,16 +121,19 @@ export default function SesionDetallePage() {
 
   const { data: todosReportes = [] } = useGetReportes();
   const reportesFiltrados = todosReportes
-    .filter((r) => getEntrevistaId(r) === entrevistaId)
+    .filter((r) => r.sesion === sesionId)
     .sort((a, b) => new Date(b.fecha_creacion).getTime() - new Date(a.fecha_creacion).getTime());
   const ultimoReporte = reportesFiltrados[0] ?? null;
 
   const actualizarObs = useActualizarObservaciones();
+  // Mismo endpoint POST /reportes/generar/ (idempotente por sesión). Dos instancias
+  // para que el botón por participante y el de "Feedback consolidado" tengan su
+  // propio estado de carga sin bloquearse entre sí.
   const generarReporteMutation = useGenerarReporte();
-  const generarIAMutation = useGenerarReporteIA();
+  const generarReporteSesionMutation = useGenerarReporte();
 
   // ── State ──
-  const [observaciones, setObservaciones] = useState("");
+  const obsTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [obsSaved, setObsSaved] = useState(false);
   const [copiadoLink, setCopiadoLink] = useState(false);
   const [copiadoSupervisor, setCopiadoSupervisor] = useState(false);
@@ -139,17 +143,10 @@ export default function SesionDetallePage() {
     open: boolean;
     reporte: Reporte | null;
     integridad: number;
-  }>({ open: false, reporte: null, integridad: 100 });
+    sospecha: number;
+  }>({ open: false, reporte: null, integridad: 100, sospecha: 0 });
   const [generandoReporte, setGenerandoReporte] = useState<Record<string, boolean>>({});
   const [mostrarMas, setMostrarMas] = useState<Record<number, boolean>>({});
-  const obsInitRef = useRef(false);
-
-  // Init observaciones once when sesionDetalle loads
-  useEffect(() => {
-    if (obsInitRef.current || !sesionDetalle) return;
-    obsInitRef.current = true;
-    setObservaciones(sesionDetalle.observaciones_internas ?? "");
-  }, [sesionDetalle]);
 
   // Auto-dismiss "guardado" badge
   useEffect(() => {
@@ -160,6 +157,7 @@ export default function SesionDetallePage() {
 
   // ── Event handlers ──
   function handleGuardarObs() {
+    const observaciones = obsTextareaRef.current?.value ?? "";
     actualizarObs.mutate(
       { sesionId, dto: { observaciones } },
       { onSuccess: () => setObsSaved(true) },
@@ -206,23 +204,23 @@ export default function SesionDetallePage() {
   async function handleGenerarReporteParticipante(inv: InvitadoSesion) {
     if (!sesionDetalle) return;
     const partAlertas = alertas.filter((a) => a.participante_nombre === inv.nombre);
-    const integridad = calcularIntegridad(partAlertas);
     const key = String(inv.id);
     setGenerandoReporte((prev) => ({ ...prev, [key]: true }));
     try {
       const reporte = await generarReporteMutation.mutateAsync(sesionDetalle.id);
-      setReporteModal({ open: true, reporte, integridad });
+      const { integridad, sospecha } = resolveScores(reporte, partAlertas);
+      setReporteModal({ open: true, reporte, integridad, sospecha });
     } finally {
       setGenerandoReporte((prev) => ({ ...prev, [key]: false }));
     }
   }
 
-  async function handleGenerarReporteIA() {
+  async function handleGenerarReporteSesion() {
     if (!entrevistaId || !sesionDetalle) return;
-    const integridad = calcularIntegridad(alertas);
     try {
-      const reporte = await generarIAMutation.mutateAsync(sesionDetalle.id);
-      setReporteModal({ open: true, reporte, integridad });
+      const reporte = await generarReporteSesionMutation.mutateAsync(sesionDetalle.id);
+      const { integridad, sospecha } = resolveScores(reporte, alertas);
+      setReporteModal({ open: true, reporte, integridad, sospecha });
     } catch {
       // error silenciado — mutation state lo expone
     }
@@ -415,7 +413,7 @@ export default function SesionDetallePage() {
                 Número de entrevistados: {sesionDetalle.invitados.length}
               </p>
               {sesionDetalle.invitados.length > 0 && (
-                <div style={{ display: "flex", gap: -4, marginTop: 6, flexDirection: "row" }}>
+                <div style={{ display: "flex", marginTop: 6, flexDirection: "row" }}>
                   {sesionDetalle.invitados.slice(0, 3).map((inv, i) => (
                     <div
                       key={inv.id}
@@ -481,7 +479,7 @@ export default function SesionDetallePage() {
                   <rect x="2" y="5" width="20" height="14" rx="2" />
                   <path d="M16 10l4-2v8l-4-2v-4z" />
                 </svg>
-                <span style={{ fontSize: 10, color: "#64748b" }}>Grabación disponible</span>
+                <span style={{ fontSize: 10, color: "#64748b" }}>Sin grabación de video</span>
               </div>
             </div>
           </div>
@@ -670,7 +668,7 @@ export default function SesionDetallePage() {
                           display: "flex",
                         }}
                       >
-                        {isGenerating ? "Analizando comportamientos…" : "Generar reporte individual"}
+                        {isGenerating ? "Analizando comportamientos…" : "Generar reporte de la sesión"}
                       </button>
                     </div>
                   </div>
@@ -684,8 +682,9 @@ export default function SesionDetallePage() {
         <div style={card}>
           <h2 style={cardTitle}>Notas generales del evaluador</h2>
           <textarea
-            value={observaciones}
-            onChange={(e) => setObservaciones(e.target.value)}
+            key={sesionId}
+            ref={obsTextareaRef}
+            defaultValue={sesionDetalle.observaciones_internas ?? ""}
             rows={5}
             placeholder="Escribe observaciones internas sobre la sesión…"
             style={{
@@ -786,7 +785,7 @@ export default function SesionDetallePage() {
                   Resumen general
                 </p>
                 <p style={{ margin: 0, fontSize: "var(--font-size-sm)", color: "var(--color-text)", lineHeight: 1.6 }}>
-                  {cleanResumen(ultimoReporte.resumen_general)}
+                  {ultimoReporte.resumen_general}
                 </p>
               </div>
 
@@ -808,17 +807,20 @@ export default function SesionDetallePage() {
 
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <button
-                  onClick={() => setReporteModal({ open: true, reporte: ultimoReporte, integridad: 100 - (ultimoReporte.nivel_riesgo === "alto" ? 60 : ultimoReporte.nivel_riesgo === "medio" ? 30 : 5) })}
+                  onClick={() => {
+                    const { integridad, sospecha } = resolveScores(ultimoReporte, alertas);
+                    setReporteModal({ open: true, reporte: ultimoReporte, integridad, sospecha });
+                  }}
                   style={btnSecondary}
                 >
                   Ver reporte completo
                 </button>
                 <button
-                  onClick={() => void handleGenerarReporteIA()}
-                  disabled={generarIAMutation.isPending}
-                  style={{ ...btnPrimary, opacity: generarIAMutation.isPending ? 0.6 : 1 }}
+                  onClick={() => void handleGenerarReporteSesion()}
+                  disabled={generarReporteSesionMutation.isPending}
+                  style={{ ...btnPrimary, opacity: generarReporteSesionMutation.isPending ? 0.6 : 1 }}
                 >
-                  {generarIAMutation.isPending ? "Analizando con IA…" : "Regenerar con IA"}
+                  {generarReporteSesionMutation.isPending ? "Generando…" : "Regenerar reporte"}
                 </button>
               </div>
             </div>
@@ -828,11 +830,11 @@ export default function SesionDetallePage() {
                 No hay reportes generados para esta sesión.
               </p>
               <button
-                onClick={() => void handleGenerarReporteIA()}
-                disabled={generarIAMutation.isPending}
-                style={{ ...btnPrimary, opacity: generarIAMutation.isPending ? 0.6 : 1 }}
+                onClick={() => void handleGenerarReporteSesion()}
+                disabled={generarReporteSesionMutation.isPending}
+                style={{ ...btnPrimary, opacity: generarReporteSesionMutation.isPending ? 0.6 : 1 }}
               >
-                {generarIAMutation.isPending ? "Analizando con IA…" : "Generar reporte con IA"}
+                {generarReporteSesionMutation.isPending ? "Generando…" : "Generar reporte"}
               </button>
             </div>
           )}
@@ -883,8 +885,7 @@ export default function SesionDetallePage() {
             {/* Modal body */}
             <div style={{ flex: 1, overflow: "auto", padding: "20px" }}>
               {(() => {
-                const { reporte, integridad } = reporteModal;
-                const sospecha = Math.max(0, 100 - integridad);
+                const { reporte, integridad, sospecha } = reporteModal;
                 return (
                   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                     {/* Nivel de riesgo */}
@@ -938,7 +939,7 @@ export default function SesionDetallePage() {
                         Resumen general
                       </p>
                       <p style={{ margin: 0, fontSize: "var(--font-size-sm)", color: "var(--color-text)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
-                        {cleanResumen(reporte.resumen_general)}
+                        {reporte.resumen_general}
                       </p>
                     </div>
 

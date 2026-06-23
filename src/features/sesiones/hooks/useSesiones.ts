@@ -6,8 +6,10 @@ import type {
   ActualizarEstadoDto,
   ActualizarObservacionesDto,
   AgregarInvitadoDto,
+  InvitadoSesion,
   Sesion,
   ResponderDto,
+  RendirResp,
 } from "../types";
 
 const BASE_KEY = ["sesiones"] as const;
@@ -106,6 +108,70 @@ export function useFinalizarCandidato() {
       });
       if (!res.ok) throw new Error("Error al finalizar la prueba");
       return res.json() as Promise<Sesion>;
+    },
+  });
+}
+
+// Todo-en-uno (Capa 3c): crea/recupera la sesión del candidato y trae su prueba.
+// POST /sesiones/rendir/ {token} -> { sesion, prueba }
+export function useRendir() {
+  return useMutation({
+    mutationFn: async (token: string) => {
+      const ctrl = new AbortController();
+      const timeout = setTimeout(() => ctrl.abort(), 12000);
+      try {
+        const res = await fetch(`${env.API_URL}/sesiones/rendir/`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token }),
+          signal: ctrl.signal,
+        });
+        if (!res.ok) {
+          let detail = `Error ${res.status}`;
+          try {
+            const e = (await res.json()) as { detail?: string };
+            if (e?.detail) detail = e.detail;
+          } catch {
+            /* sin cuerpo JSON */
+          }
+          throw new Error(detail);
+        }
+        return (await res.json()) as RendirResp;
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          throw new Error("El servidor no respondió (timeout 12s). Avisa al evaluador.", { cause: err });
+        }
+        throw err;
+      } finally {
+        clearTimeout(timeout);
+      }
+    },
+  });
+}
+
+// El supervisor (con su JWT de moderador, no el cliente autenticado normal)
+// agrega un invitado nuevo a la entrevista desde la sala pública.
+export function useAgregarInvitadoPublico() {
+  return useMutation({
+    mutationFn: async ({
+      sesionId,
+      token,
+      dto,
+    }: {
+      sesionId: number;
+      token: string;
+      dto: AgregarInvitadoDto;
+    }) => {
+      const res = await fetch(`${env.API_URL}/sesiones/${sesionId}/agregar-invitado/`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(dto),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json() as Promise<InvitadoSesion>;
     },
   });
 }

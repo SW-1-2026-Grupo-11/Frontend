@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { createPortal } from "react-dom";
-import { Button, Input } from "@/shared/components/ui";
+import { Button, Input, Modal } from "@/shared/components/ui";
 import { USUARIOS } from "@/config/constants";
 import { useCreateUsuario, useUpdateUsuario } from "../hooks/useUsuarios";
 import type { CreateUsuarioDto, EstadoUsuario, Rol, UpdateUsuarioDto, Usuario } from "../types";
@@ -109,38 +108,8 @@ export default function UsuarioModal({ onClose, usuario }: UsuarioModalProps) {
     }
   };
 
-  return createPortal(
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 50,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "var(--space-xl)",
-      }}
-    >
-      <div
-        style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0, 0, 0, 0.6)" }}
-        onClick={onClose}
-      />
-
-      <div
-        style={{
-          position: "relative",
-          zIndex: 1,
-          backgroundColor: "var(--color-surface)",
-          border: "1px solid var(--color-border)",
-          borderRadius: "var(--radius-lg)",
-          padding: "var(--space-xl)",
-          width: "100%",
-          maxWidth: "480px",
-          maxHeight: "90vh",
-          overflowY: "auto",
-          boxShadow: "var(--shadow-lg)",
-        }}
-      >
+  return (
+    <Modal onClose={onClose} maxWidth="480px">
         <div
           style={{
             display: "flex",
@@ -320,8 +289,6 @@ export default function UsuarioModal({ onClose, usuario }: UsuarioModalProps) {
             </Button>
           </div>
         </form>
-      </div>
-    </div>,
-    document.body,
+    </Modal>
   );
 }

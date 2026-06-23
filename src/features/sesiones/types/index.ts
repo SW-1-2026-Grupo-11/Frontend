@@ -120,6 +120,11 @@ export type ResponderDto = {
   tiempo_segundos?: number;
 };
 
+export type RendirResp = {
+  sesion: Sesion;
+  prueba: PruebaCandidato | null;
+};
+
 // ─── Calificación (Capa 4) — lado evaluador ────────────────────────────────────
 
 export type EstadoCorreccion = "pendiente" | "parcial" | "corregida";
