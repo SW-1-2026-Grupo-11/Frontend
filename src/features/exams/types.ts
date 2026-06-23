@@ -22,7 +22,6 @@ export type Prueba = {
 export type CreatePruebaDto = {
   titulo: string;
   descripcion: string;
-  creada_por: number;
   tipo: TipoPrueba;
   area: AreaPrueba;
   nivel: NivelPrueba;
@@ -32,7 +31,7 @@ export type CreatePruebaDto = {
   reutilizable?: boolean;
 };
 
-export type UpdatePruebaDto = Partial<Omit<CreatePruebaDto, "creada_por">>;
+export type UpdatePruebaDto = Partial<CreatePruebaDto>;
 
 // ── Módulo 2: contenido de la prueba (secciones / preguntas / opciones) ──
 

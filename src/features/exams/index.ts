@@ -16,6 +16,5 @@ export {
   useDeletePrueba,
 } from "./hooks/useExams";
 export { default as PruebasTable } from "./components/PruebasTable";
-export { default as PruebaModal } from "./components/PruebaModal";
 export { default as PruebaDetailModal } from "./components/PruebaDetailModal";
-export { default as PruebaContenidoModal } from "./components/PruebaContenidoModal";
+export { default as PruebaEditor } from "./components/PruebaEditor";

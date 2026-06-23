@@ -5,6 +5,7 @@ import HomePage from "@/pages/HomePage";
 import DashboardPage from "@/pages/DashboardPage";
 import UsuariosPage from "@/pages/UsuariosPage";
 import PruebasPage from "@/pages/PruebasPage";
+import PruebaEditorPage from "@/pages/PruebaEditorPage";
 import EntrevistasPage from "@/pages/EntrevistasPage";
 import ReportesPage from "@/pages/ReportesPage";
 import SesionesPage from "@/pages/SesionesPage";
@@ -58,6 +59,23 @@ const pruebasRoute = createRoute({
   path: "/pruebas",
   beforeLoad: requireAuth,
   component: PruebasPage,
+});
+
+const pruebaNuevaRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/pruebas/nueva",
+  beforeLoad: requireAuth,
+  component: PruebaEditorPage,
+});
+
+const pruebaEditarRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/pruebas/$pruebaId/editar",
+  beforeLoad: requireAuth,
+  validateSearch: (search: Record<string, unknown>) => ({
+    step: search.step ? Number(search.step) : undefined,
+  }),
+  component: PruebaEditorPage,
 });
 
 const entrevistasRoute = createRoute({
@@ -125,6 +143,8 @@ const routeTree = rootRoute.addChildren([
   supervisionRoute,
   usuariosRoute,
   pruebasRoute,
+  pruebaNuevaRoute,
+  pruebaEditarRoute,
   entrevistasRoute,
   reportesRoute,
   sesionesRoute,

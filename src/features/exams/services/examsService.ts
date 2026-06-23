@@ -28,9 +28,6 @@ export const examsService = {
     api.post<Prueba>("/pruebas/pruebas/", dto).then((r) => r.data),
 
   updatePrueba: (id: number, dto: UpdatePruebaDto): Promise<Prueba> =>
-    api.put<Prueba>(`/pruebas/pruebas/${id}/`, dto).then((r) => r.data),
-
-  patchPrueba: (id: number, dto: UpdatePruebaDto): Promise<Prueba> =>
     api.patch<Prueba>(`/pruebas/pruebas/${id}/`, dto).then((r) => r.data),
 
   deletePrueba: (id: number): Promise<void> =>

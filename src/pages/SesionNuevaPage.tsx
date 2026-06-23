@@ -340,11 +340,13 @@ export default function SesionNuevaPage() {
                   }}
                 >
                   <option value="">Seleccionar prueba…</option>
-                  {(pruebas ?? []).map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.titulo}
-                    </option>
-                  ))}
+                  {(pruebas ?? [])
+                    .filter((p) => p.estado === "activa")
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.titulo}
+                      </option>
+                    ))}
                 </select>
                 {errores.prueba && (
                   <span
