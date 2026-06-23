@@ -9,11 +9,17 @@ import type {
   InvitadoProgramado,
 } from "../types";
 
+export type GetEntrevistasParams = {
+  page?: number;
+  search?: string;
+  ordering?: string;
+};
+
 export const entrevistasService = {
-  getEntrevistas: (page = 1): Promise<Entrevista[]> =>
+  getEntrevistas: (params: GetEntrevistasParams = {}): Promise<PaginatedResponse<Entrevista>> =>
     api
-      .get<PaginatedResponse<Entrevista>>("/entrevistas/entrevistas/", { params: { page } })
-      .then((r) => r.data.results),
+      .get<PaginatedResponse<Entrevista>>("/entrevistas/entrevistas/", { params })
+      .then((r) => r.data),
 
   getEntrevistaById: (id: number): Promise<Entrevista> =>
     api.get<Entrevista>(`/entrevistas/entrevistas/${id}/`).then((r) => r.data),

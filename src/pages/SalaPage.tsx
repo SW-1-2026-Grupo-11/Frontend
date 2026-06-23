@@ -8,14 +8,15 @@ import { useGenerarReporte } from "@/features/reportes";
 import { ALERTAS } from "@/config/constants";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
+// 1 sesión = 1 candidato (Sesion.invitacion es FK única en el backend). Esta
+// pantalla muestra a ESE candidato, no un grid de participantes.
 
-type ParticipantData = {
+type CandidatoMetrics = {
   id: number;
   nombre: string;
   email: string;
   alertCount: number;
   severity: Severidad | null;
-  emotion: string;
   gazeOk: boolean;
   integridad: number;
   mirada: number;
@@ -23,46 +24,21 @@ type ParticipantData = {
   tabCount: number;
   sinRostro: number;
   celular: number;
-  alertas: Alerta[];
 };
-
-type TabView = "camaras" | "pantallas" | "ambas";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-
-const EMOTION_COLORS: Record<string, string> = {
-  Neutral: "var(--color-success)",
-  Nervioso: "#eab308",
-  Estresado: "var(--color-danger)",
-  Confiado: "var(--color-primary)",
-};
 
 const CSS_ANIMATIONS = `
 @keyframes sala-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.45; }
 }
-@keyframes sala-slidein {
-  from { transform: translateX(100%); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
-}
 .sala-card-danger { animation: sala-pulse 2s ease-in-out infinite; }
-.sala-detail-panel { animation: sala-slidein 0.2s ease-out; }
 `;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function inferEmotion(alertas: Alerta[]): string {
-  if (!alertas.length) return "Neutral";
-  const last = alertas[alertas.length - 1];
-  const t = last.tipo_alerta;
-  if (t === "uso_de_celular" || t === "multiples_rostros" || t === "pantalla_compartida") return "Estresado";
-  if (t === "sin_rostro" || t === "cambio_ventana" || t === "mirada_fuera_pantalla" || t === "posible_celular_o_lectura") return "Nervioso";
-  return "Neutral";
-}
-
-function computeMetrics(inv: InvitadoSesion, all: Alerta[], fechaInicio: string): ParticipantData {
-  const alertas = all.filter((a) => a.participante_nombre === inv.nombre);
+function computeMetrics(inv: InvitadoSesion, alertas: Alerta[], fechaInicio: string): CandidatoMetrics {
   const altaCount = alertas.filter((a) => a.severidad === "alta").length;
   const mediaCount = alertas.filter((a) => a.severidad === "media").length;
   const integridad = Math.max(0, 100 - altaCount * 10 - mediaCount * 5);
@@ -81,7 +57,6 @@ function computeMetrics(inv: InvitadoSesion, all: Alerta[], fechaInicio: string)
     email: inv.email,
     alertCount: alertas.length,
     severity,
-    emotion: inferEmotion(alertas),
     gazeOk: mirada === 0,
     integridad,
     mirada,
@@ -91,7 +66,6 @@ function computeMetrics(inv: InvitadoSesion, all: Alerta[], fechaInicio: string)
     celular: alertas.filter(
       (a) => a.tipo_alerta === "uso_de_celular" || a.tipo_alerta === "posible_celular_o_lectura",
     ).length,
-    alertas,
   };
 }
 
@@ -99,6 +73,15 @@ function scoreColor(n: number): string {
   if (n < 70) return "var(--color-danger)";
   if (n < 85) return "#f97316";
   return "var(--color-success)";
+}
+
+// Reemplaza la antigua "emoción" inventada: usa la severidad real (backend),
+// no una heurística sobre tipos de alerta.
+function riskInfo(severity: Severidad | null): { label: string; color: string } {
+  if (severity === "alta") return { label: "Riesgo alto", color: "var(--color-danger)" };
+  if (severity === "media") return { label: "Riesgo medio", color: "#f97316" };
+  if (severity === "baja") return { label: "Riesgo bajo", color: "#eab308" };
+  return { label: "Sin alertas", color: "var(--color-success)" };
 }
 
 function formatTime(secs: number): string {
@@ -129,164 +112,130 @@ function relativeTime(iso: string): string {
   return `hace ${Math.floor(diff / 3600)}h`;
 }
 
-// ─── ParticipantCard ──────────────────────────────────────────────────────────
+function Tag({ color, children }: { color: string; children: React.ReactNode }) {
+  return (
+    <span
+      style={{
+        fontSize: 10,
+        color,
+        background: `${color}18`,
+        padding: "1px 6px",
+        borderRadius: 10,
+        fontWeight: "var(--font-weight-medium)",
+      }}
+    >
+      {children}
+    </span>
+  );
+}
 
-function ParticipantCard({
+// ─── CandidatoPanel ───────────────────────────────────────────────────────────
+
+function CandidatoPanel({
   data,
-  tab,
-  selected,
-  onClick,
+  onGenerarReporte,
+  generarPending,
 }: {
-  data: ParticipantData;
-  tab: TabView;
-  selected: boolean;
-  onClick: () => void;
+  data: CandidatoMetrics;
+  onGenerarReporte: () => void;
+  generarPending: boolean;
 }) {
-  const isDanger = data.severity === "alta";
-  const showCamera = tab === "camaras" || tab === "ambas";
-  const showScreen = tab === "pantallas" || tab === "ambas";
+  const risk = riskInfo(data.severity);
 
   return (
     <div
-      className={isDanger ? "sala-card-danger" : undefined}
-      onClick={onClick}
+      className={data.severity === "alta" ? "sala-card-danger" : undefined}
       style={{
         background: "var(--color-surface)",
-        border: `2px solid ${selected ? "var(--color-primary)" : isDanger ? "var(--color-danger)" : "var(--color-border)"}`,
+        border: `1px solid ${data.severity === "alta" ? "var(--color-danger)" : "var(--color-border)"}`,
         borderRadius: 10,
         overflow: "hidden",
-        cursor: "pointer",
-        transition: "border-color 0.15s, box-shadow 0.15s",
-        boxShadow: selected ? "0 0 0 3px rgba(99,102,241,0.18)" : "none",
+        width: "100%",
+        maxWidth: 560,
       }}
     >
-      {/* Video placeholder area */}
-      <div style={{ display: "flex", gap: 0 }}>
-        {showCamera && (
-          <div style={{
-            flex: 1,
-            aspectRatio: "16/9",
-            background: `linear-gradient(135deg, ${avatarColor(data.id)}22, ${avatarColor(data.id)}44)`,
+      {/* Video: sin Jitsi montado en este panel todavía (pendiente: JWT para
+          rutas autenticadas). El video real hoy solo vive en el link de
+          supervisor (/join?token=...&watch=...). No se finge cámara en vivo. */}
+      <div
+        style={{
+          aspectRatio: "16/9",
+          background: "#1e293b",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 10,
+          position: "relative",
+        }}
+      >
+        <div
+          style={{
+            width: 56,
+            height: 56,
+            borderRadius: "50%",
+            background: avatarColor(data.id),
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            position: "relative",
-            borderRight: showScreen ? "1px solid var(--color-border)" : undefined,
-          }}>
-            <div style={{
-              width: 44,
-              height: 44,
-              borderRadius: "50%",
-              background: avatarColor(data.id),
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#fff",
-              fontWeight: "var(--font-weight-bold)",
-              fontSize: "var(--font-size-base)",
-            }}>
-              {initials(data.nombre)}
-            </div>
-            <span style={{
+            color: "#fff",
+            fontWeight: "var(--font-weight-bold)",
+            fontSize: "var(--font-size-lg)",
+          }}
+        >
+          {initials(data.nombre)}
+        </div>
+        <span
+          style={{
+            fontSize: "var(--font-size-xs)",
+            color: "rgba(255,255,255,0.5)",
+            textAlign: "center",
+            maxWidth: 320,
+            padding: "0 16px",
+          }}
+        >
+          Video no disponible en este panel. Usa el link de supervisor para ver la cámara en vivo.
+        </span>
+        {!data.gazeOk && (
+          <span
+            style={{
               position: "absolute",
-              top: 6,
-              left: 6,
+              bottom: 8,
+              left: 8,
               fontSize: 10,
-              background: "rgba(0,0,0,0.55)",
-              color: "#fff",
-              padding: "2px 5px",
+              background: "#eab30888",
+              color: "#713f12",
+              padding: "2px 6px",
               borderRadius: 4,
-            }}>
-              CAM
-            </span>
-            {!data.gazeOk && (
-              <span style={{
-                position: "absolute",
-                bottom: 6,
-                left: 6,
-                fontSize: 10,
-                background: "#eab30888",
-                color: "#713f12",
-                padding: "2px 5px",
-                borderRadius: 4,
-              }}>
-                Mirada desviada
-              </span>
-            )}
-          </div>
-        )}
-        {showScreen && (
-          <div style={{
-            flex: 1,
-            aspectRatio: "16/9",
-            background: "#1e293b",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            position: "relative",
-          }}>
-            <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="#475569" strokeWidth={1.5}>
-              <rect x="2" y="4" width="20" height="14" rx="2" />
-              <path d="M8 20h8M12 18v2" />
-            </svg>
-            <span style={{
-              position: "absolute",
-              top: 6,
-              left: 6,
-              fontSize: 10,
-              background: "rgba(0,0,0,0.55)",
-              color: "#fff",
-              padding: "2px 5px",
-              borderRadius: 4,
-            }}>
-              PANTALLA
-            </span>
-            {data.tabCount > 0 && (
-              <span style={{
-                position: "absolute",
-                bottom: 6,
-                left: 6,
-                fontSize: 10,
-                background: "#f9731644",
-                color: "#c2410c",
-                padding: "2px 5px",
-                borderRadius: 4,
-              }}>
-                {data.tabCount} cambios
-              </span>
-            )}
-          </div>
+            }}
+          >
+            Mirada desviada
+          </span>
         )}
       </div>
 
-      {/* Info row */}
-      <div style={{ padding: "8px 10px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 5 }}>
-          <span style={{
-            fontSize: "var(--font-size-xs)",
-            fontWeight: "var(--font-weight-semibold)",
-            color: "var(--color-text)",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            maxWidth: "60%",
-          }}>
-            {data.nombre}
-          </span>
-          <span style={{
-            fontSize: 10,
-            fontWeight: "var(--font-weight-semibold)",
-            color: EMOTION_COLORS[data.emotion] ?? "var(--color-text-muted)",
-            background: `${EMOTION_COLORS[data.emotion] ?? "#6b7280"}18`,
-            padding: "2px 7px",
-            borderRadius: 12,
-          }}>
-            {data.emotion}
-          </span>
+      <div style={{ padding: "14px 16px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <div style={{ minWidth: 0 }}>
+            <p
+              style={{
+                margin: 0,
+                fontWeight: "var(--font-weight-semibold)",
+                fontSize: "var(--font-size-sm)",
+                color: "var(--color-text)",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {data.nombre}
+            </p>
+            <p style={{ margin: 0, fontSize: 11, color: "var(--color-text-muted)" }}>{data.email}</p>
+          </div>
+          <Tag color={risk.color}>{risk.label}</Tag>
         </div>
 
-        {/* Integridad bar */}
-        <div style={{ marginBottom: 6 }}>
+        <div style={{ marginBottom: 12 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
             <span style={{ fontSize: 10, color: "var(--color-text-muted)" }}>Integridad</span>
             <span style={{ fontSize: 11, fontWeight: "var(--font-weight-semibold)", color: scoreColor(data.integridad) }}>
@@ -294,135 +243,26 @@ function ParticipantCard({
             </span>
           </div>
           <div style={{ height: 4, background: "var(--color-border)", borderRadius: 2, overflow: "hidden" }}>
-            <div style={{
-              height: "100%",
-              width: `${data.integridad}%`,
-              background: scoreColor(data.integridad),
-              borderRadius: 2,
-              transition: "width 0.3s",
-            }} />
+            <div
+              style={{
+                height: "100%",
+                width: `${data.integridad}%`,
+                background: scoreColor(data.integridad),
+                borderRadius: 2,
+                transition: "width 0.3s",
+              }}
+            />
           </div>
         </div>
 
-        {/* Tags */}
-        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-          {data.sinRostro > 0 && (
-            <Tag color="var(--color-danger)">{data.sinRostro} sin rostro</Tag>
-          )}
-          {data.celular > 0 && (
-            <Tag color="#f97316">{data.celular} celular</Tag>
-          )}
-          {data.tabCount > 0 && (
-            <Tag color="#eab308">{data.tabCount} tabs</Tag>
-          )}
-          {data.alertCount === 0 && (
-            <Tag color="var(--color-success)">Sin alertas</Tag>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Tag({ color, children }: { color: string; children: React.ReactNode }) {
-  return (
-    <span style={{
-      fontSize: 10,
-      color,
-      background: `${color}18`,
-      padding: "1px 6px",
-      borderRadius: 10,
-      fontWeight: "var(--font-weight-medium)",
-    }}>
-      {children}
-    </span>
-  );
-}
-
-// ─── DetailPanel ──────────────────────────────────────────────────────────────
-
-function DetailPanel({
-  participant,
-  onClose,
-  onGenerarReporte,
-  generarPending,
-}: {
-  participant: ParticipantData;
-  onClose: () => void;
-  onGenerarReporte: (p: ParticipantData) => void;
-  generarPending: boolean;
-}) {
-  const sorted = [...participant.alertas].sort(
-    (a, b) => new Date(b.timestamp_alerta).getTime() - new Date(a.timestamp_alerta).getTime(),
-  );
-
-  return (
-    <>
-      {/* Header */}
-      <div style={{
-        padding: "12px 14px",
-        borderBottom: "1px solid var(--color-border)",
-        display: "flex",
-        alignItems: "flex-start",
-        gap: 10,
-        flexShrink: 0,
-      }}>
-        <div style={{
-          width: 38,
-          height: 38,
-          borderRadius: "50%",
-          background: avatarColor(participant.id),
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "#fff",
-          fontWeight: "var(--font-weight-bold)",
-          fontSize: "var(--font-size-xs)",
-          flexShrink: 0,
-        }}>
-          {initials(participant.nombre)}
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ margin: 0, fontWeight: "var(--font-weight-semibold)", fontSize: "var(--font-size-xs)", color: "var(--color-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {participant.nombre}
-          </p>
-          <p style={{ margin: 0, fontSize: 10, color: "var(--color-text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {participant.email}
-          </p>
-        </div>
-        <button
-          onClick={onClose}
-          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--color-text-muted)", padding: 2, fontSize: 16, lineHeight: 1 }}
-        >
-          ×
-        </button>
-      </div>
-
-      {/* Score + stats */}
-      <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--color-border)", flexShrink: 0 }}>
-        <div style={{ textAlign: "center", marginBottom: 10 }}>
-          <span style={{ fontSize: 32, fontWeight: "var(--font-weight-bold)", color: scoreColor(participant.integridad) }}>
-            {participant.integridad}
-          </span>
-          <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>/100</span>
-          <p style={{ margin: "2px 0 0", fontSize: 10, color: "var(--color-text-muted)" }}>Índice de integridad</p>
-        </div>
-        <div style={{ height: 6, background: "var(--color-border)", borderRadius: 3, overflow: "hidden", marginBottom: 12 }}>
-          <div style={{
-            height: "100%",
-            width: `${participant.integridad}%`,
-            background: scoreColor(participant.integridad),
-            borderRadius: 3,
-          }} />
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 12px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px 12px", marginBottom: 14 }}>
           {[
-            { label: "Alertas totales", value: participant.alertCount },
-            { label: "Mirada desviada", value: participant.mirada },
-            { label: "Cambios de tab", value: participant.tabCount },
-            { label: "Celular detectado", value: participant.celular },
-            { label: "Sin rostro", value: participant.sinRostro },
-            { label: "Tiempo en sala", value: formatTime(participant.tiempoSeg) },
+            { label: "Alertas totales", value: data.alertCount },
+            { label: "Mirada desviada", value: data.mirada },
+            { label: "Cambios de tab", value: data.tabCount },
+            { label: "Celular detectado", value: data.celular },
+            { label: "Sin rostro", value: data.sinRostro },
+            { label: "Tiempo en sala", value: formatTime(data.tiempoSeg) },
           ].map(({ label, value }) => (
             <div key={label}>
               <p style={{ margin: 0, fontSize: 10, color: "var(--color-text-muted)" }}>{label}</p>
@@ -432,49 +272,9 @@ function DetailPanel({
             </div>
           ))}
         </div>
-      </div>
 
-      {/* Alert list */}
-      <div style={{ flex: 1, overflow: "auto", padding: "8px 14px" }}>
-        <p style={{ margin: "0 0 6px", fontSize: 10, fontWeight: "var(--font-weight-semibold)", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-          Historial de alertas
-        </p>
-        {sorted.length === 0 ? (
-          <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", textAlign: "center", padding: "16px 0" }}>
-            Sin alertas registradas
-          </p>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {sorted.map((a) => (
-              <div key={a.id} style={{
-                padding: "6px 8px",
-                background: "var(--color-background)",
-                borderRadius: 6,
-                borderLeft: `3px solid ${a.severidad === "alta" ? "var(--color-danger)" : a.severidad === "media" ? "#f97316" : "var(--color-text-muted)"}`,
-              }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                  <span style={{ fontSize: 11, color: "var(--color-text)", fontWeight: "var(--font-weight-medium)" }}>
-                    {(ALERTAS.TIPOS as Record<string, string>)[a.tipo_alerta] ?? a.tipo_alerta}
-                  </span>
-                  <span style={{ fontSize: 10, color: "var(--color-text-muted)", flexShrink: 0, marginLeft: 6 }}>
-                    {relativeTime(a.timestamp_alerta)}
-                  </span>
-                </div>
-                {a.descripcion && (
-                  <p style={{ margin: "2px 0 0", fontSize: 10, color: "var(--color-text-muted)" }}>
-                    {a.descripcion}
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Footer action */}
-      <div style={{ padding: "10px 14px", borderTop: "1px solid var(--color-border)", flexShrink: 0 }}>
         <button
-          onClick={() => onGenerarReporte(participant)}
+          onClick={onGenerarReporte}
           disabled={generarPending}
           style={{
             width: "100%",
@@ -489,94 +289,63 @@ function DetailPanel({
             opacity: generarPending ? 0.6 : 1,
           }}
         >
-          {generarPending ? "Generando…" : "Generar reporte IA"}
+          {generarPending ? "Generando…" : "Generar informe"}
         </button>
       </div>
-    </>
+    </div>
   );
 }
 
-// ─── RightSidebar ─────────────────────────────────────────────────────────────
+// ─── AlertasFeed (sidebar) ────────────────────────────────────────────────────
 
-function RightSidebar({
-  alertas,
-  participants,
-}: {
-  alertas: Alerta[];
-  participants: ParticipantData[];
-}) {
-  const highRisk = participants.filter((p) => p.integridad < 70).length;
-  const medRisk = participants.filter((p) => p.integridad >= 70 && p.integridad < 85).length;
-  const okCount = participants.filter((p) => p.integridad >= 85).length;
-
+function AlertasFeed({ alertas }: { alertas: Alerta[] }) {
   return (
     <>
-      {/* Summary chips */}
-      <div style={{ padding: "12px 12px 0", flexShrink: 0 }}>
-        <p style={{ margin: "0 0 8px", fontSize: 10, fontWeight: "var(--font-weight-semibold)", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-          Resumen
+      <div style={{ padding: "12px 12px 8px", flexShrink: 0 }}>
+        <p
+          style={{
+            margin: 0,
+            fontSize: 10,
+            fontWeight: "var(--font-weight-semibold)",
+            color: "var(--color-text-muted)",
+            textTransform: "uppercase",
+            letterSpacing: "0.05em",
+          }}
+        >
+          Historial de alertas
         </p>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
-          <SummaryChip color="var(--color-success)" label="OK" value={okCount} />
-          <SummaryChip color="#f97316" label="Medio" value={medRisk} />
-          <SummaryChip color="var(--color-danger)" label="Alto riesgo" value={highRisk} />
-        </div>
       </div>
-
       <div style={{ width: "100%", height: 1, background: "var(--color-border)", flexShrink: 0 }} />
-
-      {/* Alert feed */}
       <div style={{ flex: 1, overflow: "auto", padding: "10px 12px" }}>
-        <p style={{ margin: "0 0 8px", fontSize: 10, fontWeight: "var(--font-weight-semibold)", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-          Alertas recientes
-        </p>
         {alertas.length === 0 ? (
           <p style={{ fontSize: 11, color: "var(--color-text-muted)", textAlign: "center", padding: "16px 0" }}>
-            Sin alertas
+            Sin alertas registradas
           </p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {alertas.map((a) => (
-              <div key={a.id} style={{
-                padding: "6px 8px",
-                background: "var(--color-background)",
-                borderRadius: 6,
-                borderLeft: `3px solid ${a.severidad === "alta" ? "var(--color-danger)" : a.severidad === "media" ? "#f97316" : "#6b7280"}`,
-              }}>
+              <div
+                key={a.id}
+                style={{
+                  padding: "6px 8px",
+                  background: "var(--color-background)",
+                  borderRadius: 6,
+                  borderLeft: `3px solid ${a.severidad === "alta" ? "var(--color-danger)" : a.severidad === "media" ? "#f97316" : "#6b7280"}`,
+                }}
+              >
                 <p style={{ margin: 0, fontSize: 10, fontWeight: "var(--font-weight-medium)", color: "var(--color-text)", lineHeight: 1.3 }}>
                   {(ALERTAS.TIPOS as Record<string, string>)[a.tipo_alerta] ?? a.tipo_alerta}
                 </p>
-                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2 }}>
-                  <span style={{ fontSize: 9, color: "var(--color-text-muted)" }}>
-                    {a.participante_nombre ?? "—"}
-                  </span>
-                  <span style={{ fontSize: 9, color: "var(--color-text-muted)" }}>
-                    {relativeTime(a.timestamp_alerta)}
-                  </span>
-                </div>
+                <span style={{ fontSize: 9, color: "var(--color-text-muted)" }}>{relativeTime(a.timestamp_alerta)}</span>
+                {a.descripcion && (
+                  <p style={{ margin: "2px 0 0", fontSize: 10, color: "var(--color-text-muted)" }}>{a.descripcion}</p>
+                )}
               </div>
             ))}
           </div>
         )}
       </div>
     </>
-  );
-}
-
-function SummaryChip({ color, label, value }: { color: string; label: string; value: number }) {
-  return (
-    <div style={{
-      display: "flex",
-      alignItems: "center",
-      gap: 4,
-      padding: "3px 8px",
-      background: `${color}18`,
-      borderRadius: 12,
-    }}>
-      <span style={{ width: 6, height: 6, borderRadius: "50%", background: color, flexShrink: 0 }} />
-      <span style={{ fontSize: 10, color, fontWeight: "var(--font-weight-semibold)" }}>{value}</span>
-      <span style={{ fontSize: 10, color: "var(--color-text-muted)" }}>{label}</span>
-    </div>
   );
 }
 
@@ -588,14 +357,10 @@ export default function SalaPage() {
   const navigate = useNavigate();
 
   const { data: sesionDetalle, isLoading } = useGetSesionDetalle(sesionId);
-  const { data: alertasData = [] } = useAlertas(
-    sesionDetalle ? { entrevista: sesionDetalle.entrevista } : undefined,
-  );
+  const { data: alertasData = [] } = useAlertas(sesionId > 0 ? { sesion: sesionId } : undefined);
   const actualizarEstado = useActualizarEstadoSesion();
   const generarReporte = useGenerarReporte();
 
-  const [tab, setTab] = useState<TabView>("ambas");
-  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const cssInjectedRef = useRef(false);
 
@@ -620,11 +385,10 @@ export default function SalaPage() {
     return () => clearInterval(id);
   }, [sesionDetalle?.fecha_inicio]);
 
-  const participants: ParticipantData[] = sesionDetalle
-    ? sesionDetalle.invitados.map((inv) => computeMetrics(inv, alertasData, sesionDetalle.fecha_inicio))
-    : [];
-
-  const selectedParticipant = participants.find((p) => p.id === selectedId) ?? null;
+  // El candidato dueño de ESTA sesión (no "invitados", que son los de toda la convocatoria).
+  const candidato = sesionDetalle?.invitados.find((inv) => inv.id === sesionDetalle.invitacion);
+  const metrics =
+    candidato && sesionDetalle ? computeMetrics(candidato, alertasData, sesionDetalle.fecha_inicio) : null;
 
   const recentAlertas = [...alertasData]
     .sort((a, b) => new Date(b.timestamp_alerta).getTime() - new Date(a.timestamp_alerta).getTime())
@@ -638,20 +402,22 @@ export default function SalaPage() {
     );
   }
 
-  function handleGenerarReporte(_p: ParticipantData) {
+  function handleGenerarReporte() {
     if (!sesionDetalle) return;
     generarReporte.mutate(sesionId);
   }
 
   if (isLoading || !sesionDetalle) {
     return (
-      <div style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        height: "100vh",
-        background: "var(--color-background)",
-      }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          height: "100vh",
+          background: "var(--color-background)",
+        }}
+      >
         <span style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)" }}>
           Cargando sala…
         </span>
@@ -660,25 +426,29 @@ export default function SalaPage() {
   }
 
   return (
-    <div style={{
-      display: "flex",
-      flexDirection: "column",
-      height: "100vh",
-      background: "var(--color-background)",
-      overflow: "hidden",
-    }}>
-      {/* ── Topbar ── */}
-      <header style={{
-        height: 52,
-        background: "var(--color-surface)",
-        borderBottom: "1px solid var(--color-border)",
+    <div
+      style={{
         display: "flex",
-        alignItems: "center",
-        gap: 10,
-        padding: "0 16px",
-        flexShrink: 0,
-        zIndex: 10,
-      }}>
+        flexDirection: "column",
+        height: "100vh",
+        background: "var(--color-background)",
+        overflow: "hidden",
+      }}
+    >
+      {/* ── Topbar ── */}
+      <header
+        style={{
+          height: 52,
+          background: "var(--color-surface)",
+          borderBottom: "1px solid var(--color-border)",
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          padding: "0 16px",
+          flexShrink: 0,
+          zIndex: 10,
+        }}
+      >
         <button
           onClick={() => void navigate({ to: "/sesiones" as never })}
           style={{
@@ -700,59 +470,30 @@ export default function SalaPage() {
 
         <div style={{ width: 1, height: 20, background: "var(--color-border)", flexShrink: 0 }} />
 
-        <span style={{
-          fontWeight: "var(--font-weight-semibold)",
-          color: "var(--color-text)",
-          fontSize: "var(--font-size-sm)",
-          flex: 1,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}>
+        <span
+          style={{
+            fontWeight: "var(--font-weight-semibold)",
+            color: "var(--color-text)",
+            fontSize: "var(--font-size-sm)",
+            flex: 1,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
           {sesionDetalle.titulo_entrevista}
         </span>
 
-        {/* View tabs */}
-        <div style={{
-          display: "flex",
-          gap: 2,
-          background: "var(--color-background)",
-          borderRadius: 8,
-          padding: 3,
-          flexShrink: 0,
-        }}>
-          {(["camaras", "pantallas", "ambas"] as TabView[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              style={{
-                padding: "4px 12px",
-                borderRadius: 6,
-                border: "none",
-                cursor: "pointer",
-                fontSize: "var(--font-size-xs)",
-                fontWeight: tab === t ? "var(--font-weight-semibold)" : "var(--font-weight-normal)",
-                background: tab === t ? "var(--color-surface)" : "transparent",
-                color: tab === t ? "var(--color-primary)" : "var(--color-text-muted)",
-                boxShadow: tab === t ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
-                transition: "all 0.15s",
-              }}
-            >
-              {t === "camaras" ? "Cámaras" : t === "pantallas" ? "Pantallas" : "Ambas"}
-            </button>
-          ))}
-        </div>
-
-        <div style={{ width: 1, height: 20, background: "var(--color-border)", flexShrink: 0 }} />
-
-        <span style={{
-          fontFamily: "monospace",
-          fontSize: "var(--font-size-sm)",
-          color: "var(--color-text-muted)",
-          minWidth: 70,
-          textAlign: "center",
-          flexShrink: 0,
-        }}>
+        <span
+          style={{
+            fontFamily: "monospace",
+            fontSize: "var(--font-size-sm)",
+            color: "var(--color-text-muted)",
+            minWidth: 70,
+            textAlign: "center",
+            flexShrink: 0,
+          }}
+        >
           {formatTime(elapsed)}
         </span>
 
@@ -776,76 +517,42 @@ export default function SalaPage() {
         </button>
       </header>
 
-      {/* ── Body ── */}
+      {/* ── Body: 1 candidato + alertas al costado ── */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-
-        {/* Candidate grid + detail panel */}
-        <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-          {/* Grid */}
-          <div style={{ flex: 1, overflow: "auto", padding: 16 }}>
-            {participants.length === 0 ? (
-              <div style={{
+        <div style={{ flex: 1, overflow: "auto", padding: 16, display: "flex", justifyContent: "center" }}>
+          {metrics ? (
+            <CandidatoPanel
+              data={metrics}
+              onGenerarReporte={handleGenerarReporte}
+              generarPending={generarReporte.isPending}
+            />
+          ) : (
+            <div
+              style={{
+                alignSelf: "center",
                 textAlign: "center",
                 padding: "64px 0",
                 color: "var(--color-text-muted)",
                 fontSize: "var(--font-size-sm)",
-              }}>
-                No hay participantes en esta sesión
-              </div>
-            ) : (
-              <div style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(3, 1fr)",
-                gap: 12,
-              }}>
-                {participants.map((p) => (
-                  <ParticipantCard
-                    key={p.id}
-                    data={p}
-                    tab={tab}
-                    selected={selectedId === p.id}
-                    onClick={() => setSelectedId((prev) => (prev === p.id ? null : p.id))}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Detail panel */}
-          {selectedParticipant && (
-            <div
-              className="sala-detail-panel"
-              style={{
-                width: 320,
-                background: "var(--color-surface)",
-                borderLeft: "1px solid var(--color-border)",
-                display: "flex",
-                flexDirection: "column",
-                overflow: "hidden",
-                flexShrink: 0,
               }}
             >
-              <DetailPanel
-                participant={selectedParticipant}
-                onClose={() => setSelectedId(null)}
-                onGenerarReporte={handleGenerarReporte}
-                generarPending={generarReporte.isPending}
-              />
+              Sin candidato asociado a esta sesión
             </div>
           )}
         </div>
 
-        {/* Right sidebar */}
-        <aside style={{
-          width: 220,
-          background: "var(--color-surface)",
-          borderLeft: "1px solid var(--color-border)",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-          flexShrink: 0,
-        }}>
-          <RightSidebar alertas={recentAlertas} participants={participants} />
+        <aside
+          style={{
+            width: 260,
+            background: "var(--color-surface)",
+            borderLeft: "1px solid var(--color-border)",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            flexShrink: 0,
+          }}
+        >
+          <AlertasFeed alertas={recentAlertas} />
         </aside>
       </div>
     </div>

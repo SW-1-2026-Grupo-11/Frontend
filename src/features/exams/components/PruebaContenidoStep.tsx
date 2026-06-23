@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { createPortal } from "react-dom";
 import { Badge, Button } from "@/shared/components/ui";
 import {
   useGetSecciones,
@@ -8,9 +7,15 @@ import {
   useCreatePregunta,
   useDeletePregunta,
   useCreateOpcion,
+  useUpdateOpcion,
   useDeleteOpcion,
 } from "../hooks/useExams";
 import type { FormatoPregunta, Pregunta, Prueba, Seccion, TipoSeccion } from "../types";
+
+const TIPO_SECCION_LABELS: Record<TipoSeccion, string> = {
+  teorica: "Teórica",
+  practica: "Práctica",
+};
 
 const FORMATO_LABELS: Record<FormatoPregunta, string> = {
   opcion_multiple: "Opción múltiple",
@@ -46,8 +51,55 @@ const iconBtn: React.CSSProperties = {
   lineHeight: 1,
 };
 
-// ── Opciones de una pregunta cerrada ──
-function OpcionesEditor({ pregunta }: { pregunta: Pregunta }) {
+// ── Opciones de una pregunta Verdadero/Falso: fijas, solo se elige cuál es correcta ──
+function VerdaderoFalsoEditor({ pregunta }: { pregunta: Pregunta }) {
+  const createOpcion = useCreateOpcion();
+  const updateOpcion = useUpdateOpcion();
+
+  if (pregunta.opciones.length !== 2) {
+    return (
+      <div style={{ marginTop: "var(--space-xs)" }}>
+        <Button
+          variant="secondary"
+          onClick={() => {
+            createOpcion.mutate({ pregunta: pregunta.id, texto: "Verdadero", orden: 1 });
+            createOpcion.mutate({ pregunta: pregunta.id, texto: "Falso", orden: 2 });
+          }}
+          disabled={createOpcion.isPending}
+        >
+          Generar opciones Verdadero / Falso
+        </Button>
+      </div>
+    );
+  }
+
+  const marcarCorrecta = (seleccionada: Pregunta["opciones"][number]) => {
+    if (seleccionada.es_correcta) return;
+    pregunta.opciones.forEach((o) => {
+      if (o.es_correcta) updateOpcion.mutate({ id: o.id, dto: { es_correcta: false } });
+    });
+    updateOpcion.mutate({ id: seleccionada.id, dto: { es_correcta: true } });
+  };
+
+  return (
+    <div style={{ display: "flex", gap: "var(--space-md)", marginTop: "var(--space-xs)" }}>
+      {pregunta.opciones.map((o) => (
+        <label key={o.id} style={{ ...labelStyle, display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
+          <input
+            type="radio"
+            name={`vf-correcta-${pregunta.id}`}
+            checked={o.es_correcta}
+            onChange={() => marcarCorrecta(o)}
+          />
+          {o.texto}
+        </label>
+      ))}
+    </div>
+  );
+}
+
+// ── Opciones de una pregunta de opción múltiple: texto libre, agregar/quitar ──
+function OpcionMultipleEditor({ pregunta }: { pregunta: Pregunta }) {
   const createOpcion = useCreateOpcion();
   const deleteOpcion = useDeleteOpcion();
   const [texto, setTexto] = useState("");
@@ -55,11 +107,12 @@ function OpcionesEditor({ pregunta }: { pregunta: Pregunta }) {
 
   const add = () => {
     if (!texto.trim()) return;
+    const siguienteOrden = pregunta.opciones.reduce((max, o) => Math.max(max, o.orden), 0) + 1;
     createOpcion.mutate({
       pregunta: pregunta.id,
       texto,
       es_correcta: correcta,
-      orden: pregunta.opciones.length + 1,
+      orden: siguienteOrden,
     });
     setTexto("");
     setCorrecta(false);
@@ -73,7 +126,15 @@ function OpcionesEditor({ pregunta }: { pregunta: Pregunta }) {
             {o.es_correcta ? "✓" : "○"}
           </span>
           <span style={{ flex: 1, color: "var(--color-text)" }}>{o.texto}</span>
-          <button onClick={() => deleteOpcion.mutate(o.id)} style={iconBtn} aria-label="Eliminar opción">✕</button>
+          <button
+            onClick={() => {
+              if (window.confirm(`¿Eliminar la opción "${o.texto}"?`)) deleteOpcion.mutate(o.id);
+            }}
+            style={iconBtn}
+            aria-label="Eliminar opción"
+          >
+            ✕
+          </button>
         </div>
       ))}
       <div style={{ display: "flex", gap: "var(--space-xs)", alignItems: "center" }}>
@@ -90,7 +151,6 @@ function OpcionesEditor({ pregunta }: { pregunta: Pregunta }) {
 // ── Una pregunta ──
 function PreguntaItem({ pregunta }: { pregunta: Pregunta }) {
   const deletePregunta = useDeletePregunta();
-  const esCerrada = pregunta.formato === "opcion_multiple" || pregunta.formato === "verdadero_falso";
 
   return (
     <div style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", padding: "var(--space-sm)", backgroundColor: "var(--color-background)" }}>
@@ -102,9 +162,20 @@ function PreguntaItem({ pregunta }: { pregunta: Pregunta }) {
             {pregunta.lenguaje && <span style={labelStyle}>· {pregunta.lenguaje}</span>}
           </div>
           <p style={{ fontSize: "var(--font-size-sm)", color: "var(--color-text)" }}>{pregunta.enunciado}</p>
-          {esCerrada && <OpcionesEditor pregunta={pregunta} />}
+          {pregunta.formato === "verdadero_falso" && <VerdaderoFalsoEditor pregunta={pregunta} />}
+          {pregunta.formato === "opcion_multiple" && <OpcionMultipleEditor pregunta={pregunta} />}
         </div>
-        <button onClick={() => deletePregunta.mutate(pregunta.id)} style={iconBtn} aria-label="Eliminar pregunta">🗑️</button>
+        <button
+          onClick={() => {
+            if (window.confirm("¿Eliminar esta pregunta? Se perderán sus opciones.")) {
+              deletePregunta.mutate(pregunta.id);
+            }
+          }}
+          style={iconBtn}
+          aria-label="Eliminar pregunta"
+        >
+          🗑️
+        </button>
       </div>
     </div>
   );
@@ -123,12 +194,13 @@ function SeccionCard({ seccion }: { seccion: Seccion }) {
 
   const addPregunta = () => {
     if (!form.enunciado.trim()) return;
+    const siguienteOrden = seccion.preguntas.reduce((max, p) => Math.max(max, p.orden), 0) + 1;
     createPregunta.mutate({
       seccion: seccion.id,
       enunciado: form.enunciado,
       formato: form.formato,
       puntaje: form.puntaje,
-      orden: seccion.preguntas.length + 1,
+      orden: siguienteOrden,
       ...(form.formato === "codigo" && form.lenguaje ? { lenguaje: form.lenguaje } : {}),
     });
     setForm({ enunciado: "", formato: form.formato, puntaje: 1, lenguaje: "" });
@@ -140,7 +212,18 @@ function SeccionCard({ seccion }: { seccion: Seccion }) {
         <h4 style={{ fontSize: "var(--font-size-base)", fontWeight: "var(--font-weight-bold)", color: "var(--color-text)" }}>
           {seccion.titulo} <span style={{ color: "var(--color-text-muted)", fontWeight: "normal" }}>· {seccion.peso_porcentual}%</span>
         </h4>
-        <button onClick={() => deleteSeccion.mutate(seccion.id)} style={iconBtn} aria-label="Eliminar sección">🗑️</button>
+        <button
+          onClick={() => {
+            const aviso = seccion.preguntas.length > 0
+              ? `¿Eliminar la sección "${seccion.titulo}"? Se perderán sus ${seccion.preguntas.length} pregunta(s) y opciones.`
+              : `¿Eliminar la sección "${seccion.titulo}"?`;
+            if (window.confirm(aviso)) deleteSeccion.mutate(seccion.id);
+          }}
+          style={iconBtn}
+          aria-label="Eliminar sección"
+        >
+          🗑️
+        </button>
       </div>
 
       {seccion.preguntas.length === 0 ? (
@@ -195,89 +278,78 @@ function SeccionCard({ seccion }: { seccion: Seccion }) {
   );
 }
 
-type Props = { prueba: Prueba; onClose: () => void };
+const TIPOS_SECCION_POR_PRUEBA: Record<Prueba["tipo"], TipoSeccion[]> = {
+  teorica: ["teorica"],
+  tecnica: ["practica"],
+  mixta: ["teorica", "practica"],
+};
 
-export default function PruebaContenidoModal({ prueba, onClose }: Props) {
+type Props = { prueba: Prueba };
+
+export default function PruebaContenidoStep({ prueba }: Props) {
   const { data: secciones = [], isLoading } = useGetSecciones(prueba.id);
   const createSeccion = useCreateSeccion();
+  const tiposDisponibles = TIPOS_SECCION_POR_PRUEBA[prueba.tipo];
   const [titulo, setTitulo] = useState("");
-  const [tipoSeccion, setTipoSeccion] = useState<TipoSeccion>("teorica");
+  const [tipoSeccion, setTipoSeccion] = useState<TipoSeccion>(tiposDisponibles[0]);
   const [peso, setPeso] = useState(100);
 
   const totalPeso = secciones.reduce((s, sec) => s + sec.peso_porcentual, 0);
 
   const addSeccion = () => {
     if (!titulo.trim()) return;
+    if (totalPeso + peso > 100) {
+      window.alert(`La suma de pesos excedería 100% (actual: ${totalPeso}%). Ajustá el peso de la nueva sección o el de las existentes.`);
+      return;
+    }
+    const siguienteOrden = secciones.reduce((max, s) => Math.max(max, s.orden), 0) + 1;
     createSeccion.mutate({
       prueba: prueba.id,
       titulo,
       tipo: tipoSeccion,
       peso_porcentual: peso,
-      orden: secciones.length + 1,
+      orden: siguienteOrden,
     });
     setTitulo("");
-    setTipoSeccion("teorica");
+    setTipoSeccion(tiposDisponibles[0]);
     setPeso(100);
   };
 
-  return createPortal(
-    <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: "var(--space-xl)" }}>
-      <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.6)" }} onClick={onClose} />
-      <div
-        style={{
-          position: "relative",
-          zIndex: 1,
-          backgroundColor: "var(--color-surface)",
-          border: "1px solid var(--color-border)",
-          borderRadius: "var(--radius-lg)",
-          padding: "var(--space-xl)",
-          width: "100%",
-          maxWidth: "640px",
-          maxHeight: "90vh",
-          overflowY: "auto",
-          boxShadow: "var(--shadow-lg)",
-          display: "flex",
-          flexDirection: "column",
-          gap: "var(--space-lg)",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
-          <div>
-            <p style={labelStyle}>Contenido de la prueba</p>
-            <h2 style={{ fontSize: "var(--font-size-xl)", fontWeight: "var(--font-weight-bold)", color: "var(--color-text)" }}>{prueba.titulo}</h2>
-          </div>
-          <button onClick={onClose} style={{ ...iconBtn, fontSize: "var(--font-size-xl)" }} aria-label="Cerrar">✕</button>
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)" }}>
+      <p style={{ fontSize: "var(--font-size-sm)", color: totalPeso === 100 ? "var(--color-text-muted)" : "var(--color-warning)" }}>
+        Suma de pesos: {totalPeso}%{totalPeso !== 100 ? " (lo ideal es 100%)" : ""}
+      </p>
+
+      {isLoading ? (
+        <p style={labelStyle}>Cargando…</p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
+          {secciones.map((s) => (
+            <SeccionCard key={s.id} seccion={s} />
+          ))}
+          {secciones.length === 0 && (
+            <p style={{ ...labelStyle, fontStyle: "italic" }}>Aún no hay secciones. Agregá la primera abajo.</p>
+          )}
         </div>
+      )}
 
-        <p style={{ fontSize: "var(--font-size-sm)", color: totalPeso === 100 ? "var(--color-text-muted)" : "var(--color-warning)" }}>
-          Suma de pesos: {totalPeso}%{totalPeso !== 100 ? " (lo ideal es 100%)" : ""}
-        </p>
-
-        {isLoading ? (
-          <p style={labelStyle}>Cargando…</p>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
-            {secciones.map((s) => (
-              <SeccionCard key={s.id} seccion={s} />
-            ))}
-            {secciones.length === 0 && (
-              <p style={{ ...labelStyle, fontStyle: "italic" }}>Aún no hay secciones. Agregá la primera abajo.</p>
-            )}
-          </div>
-        )}
-
-        {/* Nueva sección */}
-        <div style={{ display: "flex", gap: "var(--space-xs)", alignItems: "center", borderTop: "1px solid var(--color-border)", paddingTop: "var(--space-md)" }}>
-          <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título de la sección (ej: Teoría)" style={{ ...inputStyle, flex: 1 }} />
-          <select value={tipoSeccion} onChange={(e) => setTipoSeccion(e.target.value as TipoSeccion)} style={{ ...inputStyle, width: "auto" }} title="Tipo">
-            <option value="teorica">Teórica</option>
-            <option value="practica">Práctica</option>
-          </select>
-          <input type="number" min={0} max={100} value={peso} onChange={(e) => setPeso(Number(e.target.value))} style={{ ...inputStyle, width: 90 }} title="Peso %" />
-          <Button variant="primary" onClick={addSeccion} disabled={createSeccion.isPending}>+ Sección</Button>
-        </div>
+      <div style={{ display: "flex", gap: "var(--space-xs)", alignItems: "center", borderTop: "1px solid var(--color-border)", paddingTop: "var(--space-md)" }}>
+        <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título de la sección (ej: Teoría)" style={{ ...inputStyle, flex: 1 }} />
+        <select
+          value={tipoSeccion}
+          onChange={(e) => setTipoSeccion(e.target.value as TipoSeccion)}
+          style={{ ...inputStyle, width: "auto" }}
+          title="Tipo"
+          disabled={tiposDisponibles.length === 1}
+        >
+          {tiposDisponibles.map((t) => (
+            <option key={t} value={t}>{TIPO_SECCION_LABELS[t]}</option>
+          ))}
+        </select>
+        <input type="number" min={0} max={100} value={peso} onChange={(e) => setPeso(Number(e.target.value))} style={{ ...inputStyle, width: 90 }} title="Peso %" />
+        <Button variant="primary" onClick={addSeccion} disabled={createSeccion.isPending}>+ Sección</Button>
       </div>
-    </div>,
-    document.body,
+    </div>
   );
 }

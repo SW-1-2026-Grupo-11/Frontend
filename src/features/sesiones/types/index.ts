@@ -47,6 +47,9 @@ export type SesionDetalle = {
   deadline: string;
   observaciones_internas: string | null;
   link_supervisor?: string | null;
+  // Candidato dueño de ESTA sesión (sala inv-{id}). Distinto de `invitados`,
+  // que son TODOS los invitados de la convocatoria, no de esta sesión.
+  invitacion: number | null;
   invitados: InvitadoSesion[];
 };
 
@@ -115,6 +118,11 @@ export type ResponderDto = {
   contenido_url?: string;
   casos_pasados?: number;
   tiempo_segundos?: number;
+};
+
+export type RendirResp = {
+  sesion: Sesion;
+  prueba: PruebaCandidato | null;
 };
 
 // ─── Calificación (Capa 4) — lado evaluador ────────────────────────────────────

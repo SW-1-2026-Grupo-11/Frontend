@@ -1,8 +1,9 @@
 import { useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { MainLayout } from "@/shared/components/layout";
 import { Button } from "@/shared/components/ui";
 import { useCurrentUser, useLogout } from "@/features/auth";
-import { PruebasTable, PruebaModal, PruebaDetailModal, PruebaContenidoModal } from "@/features/exams";
+import { PruebasTable, PruebaDetailModal } from "@/features/exams";
 import type { Prueba, TipoPrueba } from "@/features/exams";
 import { UI, PRUEBAS } from "@/config/constants";
 
@@ -21,34 +22,21 @@ const filterSelectStyle: React.CSSProperties = {
 export default function PruebasPage() {
   const { data: user } = useCurrentUser();
   const logout = useLogout();
+  const navigate = useNavigate();
 
   const [tipoFilter, setTipoFilter] = useState<TipoPrueba | null>(null);
-  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
-  const [editPrueba, setEditPrueba] = useState<Prueba | undefined>(undefined);
   const [detailPrueba, setDetailPrueba] = useState<Prueba | undefined>(undefined);
-  const [contenidoPrueba, setContenidoPrueba] = useState<Prueba | undefined>(undefined);
 
   const handleOpenCreate = () => {
-    setEditPrueba(undefined);
-    setIsFormModalOpen(true);
+    void navigate({ to: "/pruebas/nueva" as never });
   };
 
   const handleEdit = (prueba: Prueba) => {
-    setEditPrueba(prueba);
-    setIsFormModalOpen(true);
+    void navigate({ to: `/pruebas/${prueba.id}/editar` as never });
   };
 
   const handleView = (prueba: Prueba) => {
     setDetailPrueba(prueba);
-  };
-
-  const handleContenido = (prueba: Prueba) => {
-    setContenidoPrueba(prueba);
-  };
-
-  const handleCloseForm = () => {
-    setIsFormModalOpen(false);
-    setEditPrueba(undefined);
   };
 
   const handleCloseDetail = () => {
@@ -107,22 +95,10 @@ export default function PruebasPage() {
         tipoFilter={tipoFilter}
         onView={handleView}
         onEdit={handleEdit}
-        onContenido={handleContenido}
       />
-
-      {isFormModalOpen && (
-        <PruebaModal onClose={handleCloseForm} prueba={editPrueba} />
-      )}
 
       {detailPrueba && (
         <PruebaDetailModal prueba={detailPrueba} onClose={handleCloseDetail} />
-      )}
-
-      {contenidoPrueba && (
-        <PruebaContenidoModal
-          prueba={contenidoPrueba}
-          onClose={() => setContenidoPrueba(undefined)}
-        />
       )}
     </MainLayout>
   );

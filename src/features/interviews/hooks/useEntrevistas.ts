@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { entrevistasService } from "../services/entrevistasService";
+import type { GetEntrevistasParams } from "../services/entrevistasService";
 import type {
   CreateEntrevistaDto,
   ProgramarEntrevistaDto,
@@ -8,10 +9,11 @@ import type {
 
 const BASE_KEY = ["entrevistas"] as const;
 
-export function useGetEntrevistas(page = 1) {
+export function useGetEntrevistas(params: GetEntrevistasParams) {
   return useQuery({
-    queryKey: [...BASE_KEY, page] as const,
-    queryFn: () => entrevistasService.getEntrevistas(page),
+    queryKey: [...BASE_KEY, params] as const,
+    queryFn: () => entrevistasService.getEntrevistas(params),
+    placeholderData: (prev) => prev,
   });
 }
 

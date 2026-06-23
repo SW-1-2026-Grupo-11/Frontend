@@ -2,11 +2,17 @@ import { api } from "@/shared/lib/axios";
 import type { PaginatedResponse } from "@/shared/types/api";
 import type { Usuario, CreateUsuarioDto, UpdateUsuarioDto } from "../types";
 
+export type GetUsuariosParams = {
+  page?: number;
+  search?: string;
+  ordering?: string;
+};
+
 export const usuariosService = {
-  getUsuarios: (page = 1): Promise<Usuario[]> =>
+  getUsuarios: (params: GetUsuariosParams = {}): Promise<PaginatedResponse<Usuario>> =>
     api
-      .get<PaginatedResponse<Usuario>>("/usuarios/usuarios/", { params: { page } })
-      .then((r) => r.data.results),
+      .get<PaginatedResponse<Usuario>>("/usuarios/usuarios/", { params })
+      .then((r) => r.data),
 
   getUsuarioById: (id: number): Promise<Usuario> =>
     api.get<Usuario>(`/usuarios/usuarios/${id}/`).then((r) => r.data),

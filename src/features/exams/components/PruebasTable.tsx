@@ -7,7 +7,6 @@ type PruebasTableProps = {
   tipoFilter: TipoPrueba | null;
   onView: (prueba: Prueba) => void;
   onEdit: (prueba: Prueba) => void;
-  onContenido: (prueba: Prueba) => void;
 };
 
 type BadgeVariant = "success" | "warning" | "danger" | "info" | "neutral";
@@ -30,7 +29,7 @@ const tdStyle: React.CSSProperties = {
   verticalAlign: "middle",
 };
 
-export default function PruebasTable({ tipoFilter, onView, onEdit, onContenido }: PruebasTableProps) {
+export default function PruebasTable({ tipoFilter, onView, onEdit }: PruebasTableProps) {
   const { data: pruebas, isLoading, isError } = useGetPruebas();
   const deletePrueba = useDeletePrueba();
 
@@ -172,14 +171,6 @@ export default function PruebasTable({ tipoFilter, onView, onEdit, onContenido }
                     onClick={() => onEdit(prueba)}
                   >
                     {PRUEBAS.BTN_EDITAR}
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={isMutating}
-                    onClick={() => onContenido(prueba)}
-                  >
-                    Contenido
                   </Button>
                   <Button
                     variant="danger"

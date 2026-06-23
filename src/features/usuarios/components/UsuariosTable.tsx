@@ -1,34 +1,38 @@
-import { Badge, Button, Spinner } from "@/shared/components/ui";
+import { Badge, Button, Pagination, Spinner, Table, TableHead, Th, Td } from "@/shared/components/ui";
 import { USUARIOS } from "@/config/constants";
 import { useGetUsuarios, useDeleteUsuario } from "../hooks/useUsuarios";
 import type { EstadoUsuario, Rol, Usuario } from "../types";
 
+export type UsuariosSortField = "first_name" | "email";
+export type SortDirection = "asc" | "desc";
+export type SortState = { field: UsuariosSortField; direction: SortDirection } | null;
+
 type UsuariosTableProps = {
+  page: number;
+  onPageChange: (page: number) => void;
+  search: string;
+  sort: SortState;
+  onSortChange: (field: UsuariosSortField) => void;
   onEdit: (usuario: Usuario) => void;
 };
 
 type BadgeVariant = "success" | "warning" | "danger" | "info" | "neutral";
 
-const thStyle: React.CSSProperties = {
-  padding: "var(--space-sm) var(--space-md)",
-  textAlign: "left",
-  fontSize: "var(--font-size-sm)",
-  fontWeight: "var(--font-weight-medium)",
-  color: "var(--color-text-muted)",
-  borderBottom: "1px solid var(--color-border)",
-  whiteSpace: "nowrap",
-};
+function sortDirectionFor(field: UsuariosSortField, sort: SortState) {
+  return sort?.field === field ? sort.direction : null;
+}
 
-const tdStyle: React.CSSProperties = {
-  padding: "var(--space-sm) var(--space-md)",
-  fontSize: "var(--font-size-sm)",
-  color: "var(--color-text)",
-  borderBottom: "1px solid var(--color-border)",
-  verticalAlign: "middle",
-};
-
-export default function UsuariosTable({ onEdit }: UsuariosTableProps) {
-  const { data: usuarios, isLoading, isError } = useGetUsuarios();
+export default function UsuariosTable({
+  page,
+  onPageChange,
+  search,
+  sort,
+  onSortChange,
+  onEdit,
+}: UsuariosTableProps) {
+  const ordering = sort ? `${sort.direction === "desc" ? "-" : ""}${sort.field}` : undefined;
+  const { data, isLoading, isError } = useGetUsuarios({ page, search: search || undefined, ordering });
+  const usuarios = data?.results;
   const deleteUsuario = useDeleteUsuario();
 
   if (isLoading) {
@@ -64,7 +68,7 @@ export default function UsuariosTable({ onEdit }: UsuariosTableProps) {
           fontSize: "var(--font-size-base)",
         }}
       >
-        {USUARIOS.EMPTY}
+        {search ? USUARIOS.EMPTY_SEARCH : USUARIOS.EMPTY}
       </p>
     );
   }
@@ -78,35 +82,37 @@ export default function UsuariosTable({ onEdit }: UsuariosTableProps) {
   const isMutating = deleteUsuario.isPending;
 
   return (
-    <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead style={{ backgroundColor: "var(--color-surface-hover)" }}>
-          <tr>
-            <th style={thStyle}>{USUARIOS.COL_NOMBRE}</th>
-            <th style={thStyle}>{USUARIOS.COL_EMAIL}</th>
-            <th style={thStyle}>{USUARIOS.COL_ROL}</th>
-            <th style={thStyle}>{USUARIOS.COL_ESTADO}</th>
-            <th style={{ ...thStyle, textAlign: "right" }}>{USUARIOS.COL_ACCIONES}</th>
-          </tr>
-        </thead>
+    <div>
+      <Table>
+        <TableHead>
+          <Th sortDirection={sortDirectionFor("first_name", sort)} onClick={() => onSortChange("first_name")}>
+            {USUARIOS.COL_NOMBRE}
+          </Th>
+          <Th sortDirection={sortDirectionFor("email", sort)} onClick={() => onSortChange("email")}>
+            {USUARIOS.COL_EMAIL}
+          </Th>
+          <Th>{USUARIOS.COL_ROL}</Th>
+          <Th>{USUARIOS.COL_ESTADO}</Th>
+          <Th align="right">{USUARIOS.COL_ACCIONES}</Th>
+        </TableHead>
         <tbody>
           {usuarios.map((usuario) => (
             <tr key={usuario.id}>
-              <td style={tdStyle}>
+              <Td>
                 {usuario.first_name} {usuario.last_name}
-              </td>
-              <td style={{ ...tdStyle, color: "var(--color-text-muted)" }}>{usuario.email}</td>
-              <td style={tdStyle}>
+              </Td>
+              <Td muted>{usuario.email}</Td>
+              <Td>
                 <Badge variant={USUARIOS.ROL_BADGE[usuario.rol as Rol] as BadgeVariant}>
                   {USUARIOS.ROL_LABELS[usuario.rol as Rol]}
                 </Badge>
-              </td>
-              <td style={tdStyle}>
+              </Td>
+              <Td>
                 <Badge variant={USUARIOS.ESTADO_BADGE[usuario.estado as EstadoUsuario] as BadgeVariant}>
                   {USUARIOS.ESTADO_LABELS[usuario.estado as EstadoUsuario]}
                 </Badge>
-              </td>
-              <td style={{ ...tdStyle, textAlign: "right" }}>
+              </Td>
+              <Td align="right">
                 <div
                   style={{
                     display: "inline-flex",
@@ -131,11 +137,18 @@ export default function UsuariosTable({ onEdit }: UsuariosTableProps) {
                     {USUARIOS.BTN_ELIMINAR}
                   </Button>
                 </div>
-              </td>
+              </Td>
             </tr>
           ))}
         </tbody>
-      </table>
+      </Table>
+      <Pagination
+        page={page}
+        count={data?.count ?? 0}
+        hasNext={Boolean(data?.next)}
+        hasPrevious={Boolean(data?.previous)}
+        onPageChange={onPageChange}
+      />
     </div>
   );
 }

@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { createPortal } from "react-dom";
 import { useNavigate } from "@tanstack/react-router";
-import { Badge, Button, Spinner } from "@/shared/components/ui";
+import { Badge, Button, Modal, Spinner } from "@/shared/components/ui";
 import { ENTREVISTAS } from "@/config/constants";
 import { useGetSesionesDeConvocatoria } from "@/features/sesiones";
 import { useGetInvitadosPorEntrevista } from "../hooks/useEntrevistas";
@@ -111,40 +110,9 @@ export default function EntrevistaDetailDrawer({
     });
   };
 
-  return createPortal(
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 50,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "var(--space-xl)",
-      }}
-    >
-      <div
-        style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.6)" }}
-        onClick={onClose}
-      />
-      <div
-        style={{
-          position: "relative",
-          zIndex: 1,
-          backgroundColor: "var(--color-surface)",
-          border: "1px solid var(--color-border)",
-          borderRadius: "var(--radius-lg)",
-          padding: "var(--space-xl)",
-          width: "100%",
-          maxWidth: "780px",
-          maxHeight: "90vh",
-          overflowY: "auto",
-          boxShadow: "var(--shadow-lg)",
-          display: "flex",
-          flexDirection: "column",
-          gap: "var(--space-lg)",
-        }}
-      >
+  return (
+    <Modal onClose={onClose} maxWidth="780px">
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)" }}>
         {/* Encabezado */}
         <div
           style={{
@@ -420,8 +388,6 @@ export default function EntrevistaDetailDrawer({
           </Button>
         </div>
       </div>
-
-    </div>,
-    document.body
+    </Modal>
   );
 }

@@ -138,7 +138,9 @@ export const USUARIOS = {
   COL_ESTADO: "Estado",
   COL_ACCIONES: "Acciones",
   EMPTY: "No hay usuarios registrados",
+  EMPTY_SEARCH: "No se encontraron usuarios para esta búsqueda",
   ERROR: "Error al cargar los usuarios",
+  SEARCH_PLACEHOLDER: "Buscar por nombre, usuario o email...",
   // Acciones
   BTN_NUEVO: "Nuevo usuario",
   BTN_EDITAR: "Editar",
@@ -212,7 +214,9 @@ export const ENTREVISTAS = {
   COL_FECHA: "Fecha programada",
   COL_ACCIONES: "Acciones",
   EMPTY: "No hay convocatorias registradas",
+  EMPTY_SEARCH: "No se encontraron convocatorias para esta búsqueda",
   ERROR: "Error al cargar las convocatorias",
+  SEARCH_PLACEHOLDER: "Buscar por título o descripción...",
   // Acciones
   BTN_NUEVA: "Nueva convocatoria",
   BTN_VER: "Ver",

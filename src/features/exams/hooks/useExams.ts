@@ -16,14 +16,14 @@ const CONTENIDO_KEY = ["pruebas-contenido"] as const;
 
 export function useGetPruebas(page = 1) {
   return useQuery({
-    queryKey: [...BASE_KEY, page] as const,
+    queryKey: [...BASE_KEY, "list", page] as const,
     queryFn: () => examsService.getPruebas(page),
   });
 }
 
 export function useGetPruebaById(id: number) {
   return useQuery({
-    queryKey: [...BASE_KEY, id] as const,
+    queryKey: [...BASE_KEY, "detail", id] as const,
     queryFn: () => examsService.getPruebaById(id),
     enabled: Boolean(id),
   });

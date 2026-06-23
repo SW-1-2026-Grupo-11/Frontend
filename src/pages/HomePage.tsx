@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { MainLayout } from "@/shared/components/layout";
 import { useCurrentUser, useLogout } from "@/features/auth";
@@ -44,10 +44,27 @@ export default function HomePage() {
   const navigate = useNavigate();
   const { data: user } = useCurrentUser();
   const logout = useLogout();
-  const { data: entrevistas, isLoading } = useGetEntrevistas();
+  const { data: entrevistasPage, isLoading } = useGetEntrevistas({ page: 1 });
+  const entrevistas = entrevistasPage?.results;
 
   const [loadingId, setLoadingId] = useState<number | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Limpia links de supervisor guardados para entrevistas ya finalizadas/canceladas
+  // o que ya no existen (evita que localStorage acumule keys para siempre).
+  useEffect(() => {
+    if (!entrevistas) return;
+    const idsVigentes = new Set(
+      entrevistas
+        .filter((e) => e.estado !== "finalizada" && e.estado !== "cancelada")
+        .map((e) => e.id),
+    );
+    for (const key of Object.keys(localStorage)) {
+      if (!key.startsWith("link_supervisor_entrevista_")) continue;
+      const id = Number(key.replace("link_supervisor_entrevista_", ""));
+      if (!idsVigentes.has(id)) localStorage.removeItem(key);
+    }
+  }, [entrevistas]);
 
   const handleIniciar = async (entrevista: Entrevista) => {
     setLoadingId(entrevista.id);

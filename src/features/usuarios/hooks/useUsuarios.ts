@@ -1,13 +1,15 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { usuariosService } from "../services/usuariosService";
+import type { GetUsuariosParams } from "../services/usuariosService";
 import type { CreateUsuarioDto, UpdateUsuarioDto } from "../types";
 
 const BASE_KEY = ["usuarios"] as const;
 
-export function useGetUsuarios(page = 1) {
+export function useGetUsuarios(params: GetUsuariosParams) {
   return useQuery({
-    queryKey: [...BASE_KEY, page] as const,
-    queryFn: () => usuariosService.getUsuarios(page),
+    queryKey: [...BASE_KEY, params] as const,
+    queryFn: () => usuariosService.getUsuarios(params),
+    placeholderData: (prev) => prev,
   });
 }
 
