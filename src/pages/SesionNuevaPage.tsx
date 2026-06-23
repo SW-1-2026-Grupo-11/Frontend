@@ -31,11 +31,18 @@ function fixLink(link: string): string {
   }
 }
 
+// Margen de gracia: permite agendar hasta 5 min en el pasado (reloj del navegador
+// puede ir un poco atrás, o el reclutador tarda en completar el formulario).
+const MARGEN_GRACIA_MS = 5 * 60 * 1000;
+
+function fechaMinimaPermitida(): Date {
+  return new Date(Date.now() - MARGEN_GRACIA_MS);
+}
+
 // Formato "YYYY-MM-DDTHH:mm" en hora local, para el atributo min del datetime-local.
-function nowAsDatetimeLocal(): string {
-  const now = new Date();
-  const offsetMs = now.getTimezoneOffset() * 60000;
-  return new Date(now.getTime() - offsetMs).toISOString().slice(0, 16);
+function toDatetimeLocal(date: Date): string {
+  const offsetMs = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
 }
 
 // ─── Tipos locales ────────────────────────────────────────────────────────────
@@ -165,7 +172,7 @@ export default function SesionNuevaPage() {
     if (!pruebaId) nuevos.prueba = "Selecciona una prueba del banco";
     if (!evaluadorId) nuevos.evaluador = "Selecciona un evaluador";
     if (!fechaProgramada) nuevos.fecha = "La fecha es requerida";
-    else if (new Date(fechaProgramada) <= new Date())
+    else if (new Date(fechaProgramada) < fechaMinimaPermitida())
       nuevos.fecha = "La fecha debe ser futura";
     if (candidatos.length === 0)
       nuevos.candidatos = "Agrega al menos un candidato";
@@ -371,7 +378,7 @@ export default function SesionNuevaPage() {
                   <input
                     type="datetime-local"
                     value={fechaProgramada}
-                    min={nowAsDatetimeLocal()}
+                    min={toDatetimeLocal(fechaMinimaPermitida())}
                     onChange={(e) => {
                       setFechaProgramada(e.target.value);
                       if (errores.fecha)
