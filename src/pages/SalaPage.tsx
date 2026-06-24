@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "@tanstack/react-router";
-import { useGetSesionDetalle, useActualizarEstadoSesion } from "@/features/sesiones";
+import { useGetSesionDetalle, useActualizarEstadoSesion, sesionesService } from "@/features/sesiones";
 import type { InvitadoSesion } from "@/features/sesiones";
 import { useAlertas } from "@/features/alertas";
 import type { Alerta, Severidad } from "@/features/alertas";
 import { useGenerarReporte } from "@/features/reportes";
 import { ALERTAS } from "@/config/constants";
+import { JitsiRoom } from "@/features/supervision";
+import env from "@/config/env";
+
+const SELF_HOSTED_JITSI = env.JITSI_DOMAIN !== "meet.jit.si";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 // 1 sesión = 1 candidato (Sesion.invitacion es FK única en el backend). Esta
@@ -133,9 +137,11 @@ function Tag({ color, children }: { color: string; children: React.ReactNode }) 
 
 function CandidatoPanel({
   data,
+  jitsiJwt,
   onGenerarReporte,
   generarPending,
 }: {
+  jitsiJwt?: string;
   data: CandidatoMetrics;
   onGenerarReporte: () => void;
   generarPending: boolean;
@@ -154,48 +160,55 @@ function CandidatoPanel({
         maxWidth: 560,
       }}
     >
-      {/* Video: sin Jitsi montado en este panel todavía (pendiente: JWT para
-          rutas autenticadas). El video real hoy solo vive en el link de
-          supervisor (/join?token=...&watch=...). No se finge cámara en vivo. */}
       <div
         style={{
           aspectRatio: "16/9",
           background: "#1e293b",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 10,
           position: "relative",
+          overflow: "hidden",
         }}
       >
-        <div
-          style={{
-            width: 56,
-            height: 56,
-            borderRadius: "50%",
-            background: avatarColor(data.id),
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "#fff",
-            fontWeight: "var(--font-weight-bold)",
-            fontSize: "var(--font-size-lg)",
-          }}
-        >
-          {initials(data.nombre)}
-        </div>
-        <span
-          style={{
-            fontSize: "var(--font-size-xs)",
-            color: "rgba(255,255,255,0.5)",
-            textAlign: "center",
-            maxWidth: 320,
-            padding: "0 16px",
-          }}
-        >
-          Video no disponible en este panel. Usa el link de supervisor para ver la cámara en vivo.
-        </span>
+        {SELF_HOSTED_JITSI && !jitsiJwt ? (
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 10,
+            }}
+          >
+            <div
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: "50%",
+                background: avatarColor(data.id),
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#fff",
+                fontWeight: "var(--font-weight-bold)",
+                fontSize: "var(--font-size-lg)",
+              }}
+            >
+              {initials(data.nombre)}
+            </div>
+            <span style={{ fontSize: "var(--font-size-xs)", color: "rgba(255,255,255,0.5)" }}>
+              Conectando a la sala…
+            </span>
+          </div>
+        ) : (
+          <JitsiRoom
+            roomName={`inv-${data.id}`}
+            displayName={data.nombre}
+            email={data.email}
+            isModerator
+            jwt={jitsiJwt}
+          />
+        )}
         {!data.gazeOk && (
           <span
             style={{
@@ -390,6 +403,33 @@ export default function SalaPage() {
   const metrics =
     candidato && sesionDetalle ? computeMetrics(candidato, alertasData, sesionDetalle.fecha_inicio) : null;
 
+  // JWT de Jitsi self-hosted (en meet.jit.si público no se usa). Se pide a
+  // demanda: 1) JWT app de moderador (autenticado) → 2) JWT de Jitsi para
+  // la sala del candidato.
+  const [jitsiJwt, setJitsiJwt] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    if (!SELF_HOSTED_JITSI || !candidato || sesionId <= 0) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const appToken = await sesionesService.getSupervisorToken(sesionId);
+        const res = await fetch(`${env.API_URL}/sesiones/jitsi-token/`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: appToken, watch: candidato.id }),
+        });
+        if (!res.ok) return;
+        const d = (await res.json()) as { jwt?: string };
+        if (!cancelled && d.jwt) setJitsiJwt(d.jwt);
+      } catch {
+        /* sin video: queda el placeholder de "conectando" */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sesionId, candidato?.id]);
+
   const recentAlertas = [...alertasData]
     .sort((a, b) => new Date(b.timestamp_alerta).getTime() - new Date(a.timestamp_alerta).getTime())
     .slice(0, 20);
@@ -523,6 +563,7 @@ export default function SalaPage() {
           {metrics ? (
             <CandidatoPanel
               data={metrics}
+              jitsiJwt={jitsiJwt}
               onGenerarReporte={handleGenerarReporte}
               generarPending={generarReporte.isPending}
             />

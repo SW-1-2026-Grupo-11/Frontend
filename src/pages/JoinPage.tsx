@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearch } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useJwtDecode } from "@/shared/hooks/useJwtDecode";
 import {
   useActualizarObservaciones,
@@ -167,6 +167,7 @@ export default function JoinPage() {
   });
 
   // ── Mutaciones ──
+  const queryClient = useQueryClient();
   const actualizarObsMutation = useActualizarObservaciones();
   const finalizarCandidato = useFinalizarCandidato();
   const agregarInvitadoMutation = useAgregarInvitadoPublico();
@@ -343,6 +344,7 @@ export default function JoinPage() {
           setNuevoEmail("");
           setMensajeAgregar("✓ Invitado agregado");
           setTimeout(() => setMensajeAgregar(null), 2000);
+          void queryClient.invalidateQueries({ queryKey: ["sesion-detalle-publica", sesion?.id, token] });
         },
         onError: () => {
           setMensajeAgregar("Error al agregar invitado");

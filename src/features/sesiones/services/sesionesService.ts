@@ -66,4 +66,10 @@ export const sesionesService = {
 
   getAuditoria: (sesionId: number): Promise<RegistroAuditoria[]> =>
     api.get<RegistroAuditoria[]>(`/sesiones/${sesionId}/auditoria/`).then((r) => r.data),
+
+  // JWT moderador (app), para luego pedir el JWT de Jitsi sin el link público.
+  getSupervisorToken: (sesionId: number): Promise<string> =>
+    api
+      .post<{ token: string }>(`/sesiones/${sesionId}/supervisor-token/`)
+      .then((r) => r.data.token),
 };
