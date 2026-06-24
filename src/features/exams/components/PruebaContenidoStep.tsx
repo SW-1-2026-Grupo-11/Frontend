@@ -9,6 +9,7 @@ import {
   useCreateOpcion,
   useUpdateOpcion,
   useDeleteOpcion,
+  useGenerarPreguntas,
 } from "../hooks/useExams";
 import type { FormatoPregunta, Pregunta, Prueba, Seccion, TipoSeccion } from "../types";
 
@@ -181,8 +182,129 @@ function PreguntaItem({ pregunta }: { pregunta: Pregunta }) {
   );
 }
 
+// ── Panel "Generar preguntas con IA" de una sección ──
+function GenerarIAPanel({ seccion, prueba }: { seccion: Seccion; prueba: Prueba }) {
+  const generar = useGenerarPreguntas();
+  const createPregunta = useCreatePregunta();
+  const createOpcion = useCreateOpcion();
+  const [abierto, setAbierto] = useState(false);
+  const [gen, setGen] = useState<{ cantidad: number; formato: FormatoPregunta; tema: string }>({
+    cantidad: 3,
+    formato: "opcion_multiple",
+    tema: "",
+  });
+  const [error, setError] = useState<string | null>(null);
+
+  const ocupado = generar.isPending || createPregunta.isPending || createOpcion.isPending;
+
+  const generarConIA = async () => {
+    setError(null);
+    try {
+      const preguntas = await generar.mutateAsync({
+        area: prueba.area,
+        nivel: prueba.nivel,
+        cantidad: gen.cantidad,
+        formato: gen.formato,
+        tema: gen.tema.trim() || undefined,
+      });
+      let orden = seccion.preguntas.reduce((max, p) => Math.max(max, p.orden), 0);
+      for (const pg of preguntas) {
+        orden += 1;
+        const creada = await createPregunta.mutateAsync({
+          seccion: seccion.id,
+          enunciado: pg.enunciado,
+          formato: pg.formato ?? gen.formato,
+          puntaje: 1,
+          orden,
+          ...(pg.rubrica ? { rubrica: pg.rubrica } : {}),
+          ...(pg.lenguaje ? { lenguaje: pg.lenguaje } : {}),
+        });
+        if (pg.opciones?.length) {
+          let o = 0;
+          for (const op of pg.opciones) {
+            o += 1;
+            await createOpcion.mutateAsync({
+              pregunta: creada.id,
+              texto: op.texto,
+              es_correcta: Boolean(op.es_correcta),
+              orden: o,
+            });
+          }
+        }
+      }
+      setAbierto(false);
+      setGen((g) => ({ ...g, tema: "" }));
+    } catch (e) {
+      const detail =
+        (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setError(detail || "No se pudo generar. ¿Está el servicio de IA disponible?");
+    }
+  };
+
+  if (!abierto) {
+    return (
+      <Button variant="secondary" onClick={() => setAbierto(true)}>
+        ✨ Generar preguntas con IA
+      </Button>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-xs)",
+        border: "1px dashed var(--color-primary)",
+        borderRadius: "var(--radius-md)",
+        padding: "var(--space-sm)",
+      }}
+    >
+      <span style={{ ...labelStyle, color: "var(--color-text)", fontWeight: "var(--font-weight-bold)" }}>
+        ✨ Generar con IA <span style={labelStyle}>({prueba.area} · {prueba.nivel})</span>
+      </span>
+      <div style={{ display: "flex", gap: "var(--space-xs)", flexWrap: "wrap", alignItems: "center" }}>
+        <input
+          type="number"
+          min={1}
+          max={10}
+          value={gen.cantidad}
+          onChange={(e) => setGen((g) => ({ ...g, cantidad: Number(e.target.value) }))}
+          style={{ ...inputStyle, width: 70 }}
+          title="Cantidad"
+        />
+        <select
+          value={gen.formato}
+          onChange={(e) => setGen((g) => ({ ...g, formato: e.target.value as FormatoPregunta }))}
+          style={{ ...inputStyle, width: "auto" }}
+        >
+          {Object.entries(FORMATO_LABELS).map(([v, l]) => (
+            <option key={v} value={v}>{l}</option>
+          ))}
+        </select>
+        <input
+          value={gen.tema}
+          onChange={(e) => setGen((g) => ({ ...g, tema: e.target.value }))}
+          placeholder="Tema (opcional)"
+          style={{ ...inputStyle, flex: 1, minWidth: 140 }}
+        />
+      </div>
+      {error && <span style={{ ...labelStyle, color: "var(--color-danger)" }}>{error}</span>}
+      <div style={{ display: "flex", gap: "var(--space-xs)", alignItems: "center" }}>
+        <Button variant="primary" onClick={generarConIA} disabled={ocupado}>
+          {ocupado ? "Generando… (~1 min)" : "Generar"}
+        </Button>
+        <Button variant="secondary" onClick={() => setAbierto(false)} disabled={ocupado}>
+          Cancelar
+        </Button>
+        {ocupado && <span style={labelStyle}>El modelo local está trabajando, no cierres la ventana.</span>}
+      </div>
+    </div>
+  );
+}
+
 // ── Una sección con sus preguntas ──
-function SeccionCard({ seccion }: { seccion: Seccion }) {
+function SeccionCard({ seccion, prueba }: { seccion: Seccion; prueba: Prueba }) {
   const deleteSeccion = useDeleteSeccion();
   const createPregunta = useCreatePregunta();
   const [form, setForm] = useState<{ enunciado: string; formato: FormatoPregunta; puntaje: number; lenguaje: string }>({
@@ -235,6 +357,11 @@ function SeccionCard({ seccion }: { seccion: Seccion }) {
           ))}
         </div>
       )}
+
+      {/* Generar con IA */}
+      <div style={{ borderTop: "1px dashed var(--color-border)", paddingTop: "var(--space-sm)" }}>
+        <GenerarIAPanel seccion={seccion} prueba={prueba} />
+      </div>
 
       {/* Nueva pregunta */}
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-xs)", borderTop: "1px dashed var(--color-border)", paddingTop: "var(--space-sm)" }}>
@@ -326,7 +453,7 @@ export default function PruebaContenidoStep({ prueba }: Props) {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
           {secciones.map((s) => (
-            <SeccionCard key={s.id} seccion={s} />
+            <SeccionCard key={s.id} seccion={s} prueba={prueba} />
           ))}
           {secciones.length === 0 && (
             <p style={{ ...labelStyle, fontStyle: "italic" }}>Aún no hay secciones. Agregá la primera abajo.</p>

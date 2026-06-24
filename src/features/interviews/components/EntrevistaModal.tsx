@@ -28,7 +28,7 @@ type FormErrors = Partial<Record<keyof FormState, string>>;
 
 const MARGEN_GRACIA_MS = 5 * 60 * 1000;
 
-function validateForm(state: FormState, isEdit: boolean): FormErrors {
+function validateForm(state: FormState): FormErrors {
   const errors: FormErrors = {};
   if (!state.titulo.trim()) errors.titulo = ENTREVISTAS.VALIDATION_REQUIRED;
   if (!state.descripcion.trim()) errors.descripcion = ENTREVISTAS.VALIDATION_REQUIRED;
@@ -89,7 +89,7 @@ export default function EntrevistaModal({ onClose, entrevista }: EntrevistaModal
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const errors = validateForm(form, isEdit);
+    const errors = validateForm(form);
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
       return;

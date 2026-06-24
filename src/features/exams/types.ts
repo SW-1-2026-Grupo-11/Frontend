@@ -111,3 +111,21 @@ export type CreateOpcionDto = {
 };
 
 export type UpdateOpcionDto = Partial<Omit<CreateOpcionDto, "pregunta">>;
+
+// ── Generar preguntas con IA (LLM local) ──
+export type GenerarPreguntasDto = {
+  area: string;
+  nivel: string;
+  cantidad: number;
+  formato: FormatoPregunta;
+  tema?: string;
+};
+
+/** Borrador devuelto por la IA (no persistido). El front lo crea al confirmar. */
+export type PreguntaGenerada = {
+  enunciado: string;
+  formato: FormatoPregunta;
+  opciones?: { texto: string; es_correcta: boolean }[];
+  rubrica?: unknown;
+  lenguaje?: string;
+};

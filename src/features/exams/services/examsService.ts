@@ -13,6 +13,8 @@ import type {
   Opcion,
   CreateOpcionDto,
   UpdateOpcionDto,
+  GenerarPreguntasDto,
+  PreguntaGenerada,
 } from "../types";
 
 export const examsService = {
@@ -69,4 +71,10 @@ export const examsService = {
 
   deleteOpcion: (id: number): Promise<void> =>
     api.delete(`/pruebas/opciones/${id}/`).then(() => undefined),
+
+  // ── Generar preguntas con IA (devuelve borradores, no los guarda) ──
+  generarPreguntas: (dto: GenerarPreguntasDto): Promise<PreguntaGenerada[]> =>
+    api
+      .post<{ preguntas: PreguntaGenerada[] }>("/pruebas/pruebas/generar-preguntas/", dto)
+      .then((r) => r.data.preguntas),
 };

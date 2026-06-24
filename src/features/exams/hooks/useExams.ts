@@ -9,6 +9,7 @@ import type {
   UpdatePreguntaDto,
   CreateOpcionDto,
   UpdateOpcionDto,
+  GenerarPreguntasDto,
 } from "../types";
 
 const BASE_KEY = ["pruebas"] as const;
@@ -149,5 +150,12 @@ export function useDeleteOpcion() {
   return useMutation({
     mutationFn: (id: number) => examsService.deleteOpcion(id),
     onSuccess: invalidar,
+  });
+}
+
+/** Genera preguntas con IA (no persiste; el componente crea las confirmadas). */
+export function useGenerarPreguntas() {
+  return useMutation({
+    mutationFn: (dto: GenerarPreguntasDto) => examsService.generarPreguntas(dto),
   });
 }
